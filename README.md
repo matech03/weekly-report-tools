@@ -20,9 +20,6 @@ Google Sheets.
 ```text
 git-team-tools/
 ├── install.sh
-├── CLAUDE.md
-├── codex-skills/
-│   └── weekly-report-tools/
 ├── hooks/
 │   └── commit-msg
 ├── scripts/
@@ -94,17 +91,6 @@ Advanced: override the source repository used by the bootstrap installer:
 ```bash
 TOOLS_REPO_URL="https://github.com/matech03/weekly-report-tools.git" bash install-weekly-report-tools.sh
 ```
-
-## Agent Context
-
-This repository includes context files for coding agents:
-
-- `CLAUDE.md` for Claude Code and Claude-style repository memory.
-- `codex-skills/weekly-report-tools/` as a vendored Codex skill that can be copied or symlinked into `~/.codex/skills/weekly-report-tools` when you want Codex to auto-discover it.
-
-The skill and Claude instructions describe the installer, commit convention,
-weekly report commands, Google Sheets webhook troubleshooting, and validation
-commands for maintaining this repo.
 
 ## Configuration
 
