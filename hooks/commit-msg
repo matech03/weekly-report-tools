@@ -1,0 +1,170 @@
+#!/usr/bin/env python3
+"""
+Git hook: commit-msg
+Validate commit message theo format: TASK: ... | BUG: ...
+"""
+
+import sys
+import re
+
+VALID_PREFIXES = ["TASK:", "BUG:"]
+
+SKIP_PATTERNS = [
+    r"^Merge ",
+    r"^Revert ",
+    r"^fixup! ",
+    r"^squash! ",
+]
+
+# Các cụm từ bị coi là mô tả quá chung chung
+VAGUE_PATTERNS = [
+    # Tiếng Anh
+    r"^(TASK|BUG):\s*(update|updates|updated)\b",
+    r"^(TASK|BUG):\s*(fix|fixed|fixes)\b\s*$",
+    r"^(TASK|BUG):\s*fix\s+bug\b",
+    r"^(TASK|BUG):\s*(remove|removed|removes)\s+(some|a\s+few|old|unused)?\s*(code|codes|file|files|stuff|things)\b",
+    r"^(TASK|BUG):\s*(add|added|adds)\s+(some|a\s+few)?\s*(code|codes|file|files|stuff|things)\b",
+    r"^(TASK|BUG):\s*(minor\s+)?(change|changes|changed)\b",
+    r"^(TASK|BUG):\s*(clean\s*up|cleanup|cleaning)\b",
+    r"^(TASK|BUG):\s*(refactor|refactoring|refactored)\b\s*$",
+    r"^(TASK|BUG):\s*(misc|miscellaneous|wip|work\s+in\s+progress)\b",
+    r"^(TASK|BUG):\s*(temp|temporary|tmp)\b",
+    r"^(TASK|BUG):\s*(test|testing|tested)\b\s*$",
+    r"^(TASK|BUG):\s*(improve|improved|improvement|improvements)\b\s*$",
+    r"^(TASK|BUG):\s*(edit|edited|edits)\b",
+    r"^(TASK|BUG):\s*(modify|modified|modifies)\b",
+    r"^(TASK|BUG):\s*(small|minor|tiny)\s+(fix|change|update|edit)\b",
+    # Tiếng Việt
+    r"^(TASK|BUG):\s*(cập\s*nhật|update)\s+(code|file|source|màn\s+hình|screen|giao\s*diện)?\s*$",
+    r"^(TASK|BUG):\s*sửa\s+(lỗi|bug)\s*$",
+    r"^(TASK|BUG):\s*(xóa|xoá|remove)\s+(một\s+số\s+)?(code|file|hàm|function)\s*$",
+    r"^(TASK|BUG):\s*(thêm|add)\s+(một\s+số\s+)?(code|file|thứ|stuff)\s*$",
+    r"^(TASK|BUG):\s*(chỉnh\s*sửa|chỉnh|sửa)\s+(nhỏ|nho|lặt\s*vặt|linh\s*tinh)?\s*$",
+    r"^(TASK|BUG):\s*(dọn|dọn\s*dẹp|cleanup)\s*(code)?\s*$",
+    r"^(TASK|BUG):\s*(tạm\s*thời|tạm|temp)\b",
+    r"^(TASK|BUG):\s*(linh\s*tinh|lặt\s*vặt|misc|vv\.?)\b",
+]
+
+# Mô tả quá ngắn sau prefix (ít hơn 3 từ có nghĩa)
+MIN_DESCRIPTION_WORDS = 3
+
+def is_vague(msg):
+    lower = msg.lower().strip()
+    for pattern in VAGUE_PATTERNS:
+        if re.match(pattern, lower, re.IGNORECASE):
+            return True
+    return False
+
+def is_too_short(msg):
+    # Lấy phần sau "TASK: " hoặc "BUG: "
+    for prefix in VALID_PREFIXES:
+        if msg.upper().startswith(prefix):
+            description = msg[len(prefix):].strip()
+            words = [w for w in description.split() if len(w) > 1]
+            return len(words) < MIN_DESCRIPTION_WORDS
+    return False
+
+def print_box(lines):
+    width = max(len(l) for l in lines) + 2
+    print()
+    print("╔" + "═" * width + "╗")
+    for line in lines:
+        padding = width - len(line) - 1
+        print("║ " + line + " " * padding + "║")
+    print("╚" + "═" * width + "╝")
+    print()
+
+def main():
+    commit_msg_file = sys.argv[1]
+    with open(commit_msg_file, "r", encoding="utf-8") as f:
+        msg = f.read().strip()
+
+    lines = [l for l in msg.split("\n") if not l.startswith("#")]
+    first_line = lines[0].strip() if lines else ""
+
+    if not first_line:
+        print("❌  Commit message không được để trống.")
+        sys.exit(1)
+
+    for pattern in SKIP_PATTERNS:
+        if re.match(pattern, first_line):
+            sys.exit(0)
+
+    # ── Check 1: Đúng prefix chưa ───────────────────────────
+    has_valid_prefix = any(first_line.upper().startswith(p) for p in VALID_PREFIXES)
+    if not has_valid_prefix:
+        print_box([
+            "❌  COMMIT BỊ TỪ CHỐI — Sai format",
+            "",
+            "  FORMAT BẮT BUỘC:",
+            "    TASK: <mô tả cụ thể công việc / tính năng>",
+            "    BUG:  <mô tả cụ thể lỗi đã sửa>",
+            "",
+            "  VÍ DỤ HỢP LỆ:",
+            "    TASK: Thêm màn hình chọn theme cá nhân hoá",
+            "    BUG: Sửa crash khi mở app lần đầu trên Android 12",
+            "",
+            "  💡 Dùng gợi ý AI: python .team-tools/suggest_commit.py",
+        ])
+        print(f"  Message của bạn: \"{first_line}\"")
+        print()
+        sys.exit(1)
+
+    # ── Check 2: Mô tả quá chung chung ──────────────────────
+    if is_vague(first_line):
+        print_box([
+            "❌  COMMIT BỊ TỪ CHỐI — Mô tả quá chung chung",
+            "",
+            "  Mô tả cần nói rõ: làm GÌ, ở đâu, tại sao.",
+            "",
+            "  ❌  KHÔNG được dùng:",
+            "    TASK: update code",
+            "    BUG:  fix bug",
+            "    TASK: remove some code",
+            "    TASK: chỉnh sửa nhỏ",
+            "    BUG:  sửa lỗi",
+            "",
+            "  ✅  NÊN viết:",
+            "    TASK: Cập nhật logic validate form đăng ký",
+            "    BUG:  Sửa crash khi submit form thiếu email",
+            "    TASK: Xoá các API endpoint không còn sử dụng",
+            "",
+            "  💡 Dùng gợi ý AI: python .team-tools/suggest_commit.py",
+        ])
+        print(f"  Message của bạn: \"{first_line}\"")
+        print()
+        sys.exit(1)
+
+    # ── Check 3: Mô tả quá ngắn ─────────────────────────────
+    if is_too_short(first_line):
+        print_box([
+            "❌  COMMIT BỊ TỪ CHỐI — Mô tả quá ngắn",
+            "",
+            "  Cần ít nhất 3 từ sau TASK:/BUG: để mô tả đủ ý.",
+            "",
+            "  ❌  Quá ngắn:",
+            "    TASK: login",
+            "    BUG:  null pointer",
+            "",
+            "  ✅  Đủ ý:",
+            "    TASK: Thêm chức năng đăng nhập Google",
+            "    BUG:  Sửa null pointer khi load profile",
+            "",
+            "  💡 Dùng gợi ý AI: python .team-tools/suggest_commit.py",
+        ])
+        print(f"  Message của bạn: \"{first_line}\"")
+        print()
+        sys.exit(1)
+
+    # ── Check 4: Dòng đầu quá dài ───────────────────────────
+    if len(first_line) > 72:
+        print()
+        print(f"⚠️  Commit message quá dài (tối đa 72 ký tự, hiện tại: {len(first_line)}).")
+        print(f"   \"{first_line}\"")
+        print()
+        sys.exit(1)
+
+    sys.exit(0)
+
+if __name__ == "__main__":
+    main()
