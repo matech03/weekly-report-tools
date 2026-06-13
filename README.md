@@ -57,8 +57,21 @@ export ANTHROPIC_MODEL="claude-sonnet-4-6"
 
 ## Install Into a Project Repository
 
-Run the installer from the root of the project repository that should use these
-tools:
+Recommended one-file install:
+
+```bash
+cd /path/to/your-project
+curl -fsSL https://raw.githubusercontent.com/matech03/weekly-report-tools/main/install.sh -o install-weekly-report-tools.sh
+bash install-weekly-report-tools.sh
+rm install-weekly-report-tools.sh
+```
+
+The downloaded `install.sh` is enough. If the full tool files are not available
+beside it, the installer clones this public repository into a temporary
+directory and continues the installation from there.
+
+If you already cloned this repository locally, you can also install from that
+local copy:
 
 ```bash
 cd /path/to/your-project
@@ -72,6 +85,12 @@ The installer will:
 - Back up an existing `commit-msg` hook before replacing it
 - Create `.team-tools/.env` if it does not exist
 - Add `.team-tools/.env` to the project `.gitignore`
+
+Advanced: override the source repository used by the bootstrap installer:
+
+```bash
+TOOLS_REPO_URL="https://github.com/matech03/weekly-report-tools.git" bash install-weekly-report-tools.sh
+```
 
 ## Configuration
 

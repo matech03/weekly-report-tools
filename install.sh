@@ -4,10 +4,12 @@
 
 set -e
 
+TOOLS_REPO_URL="${TOOLS_REPO_URL:-https://github.com/matech03/weekly-report-tools.git}"
 TOOLS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(pwd)"
 GIT_HOOKS_DIR="$REPO_DIR/.git/hooks"
 SCRIPTS_TARGET="$REPO_DIR/.team-tools"
+TMP_TOOLS_DIR=""
 
 GREEN="\033[92m"
 YELLOW="\033[93m"
@@ -22,10 +24,35 @@ echo -e "║     🛠️   git-team-tools installer       ║"
 echo -e "╚══════════════════════════════════════════╝${RESET}"
 echo ""
 
+cleanup() {
+    if [ -n "$TMP_TOOLS_DIR" ] && [ -d "$TMP_TOOLS_DIR" ]; then
+        rm -rf "$TMP_TOOLS_DIR"
+    fi
+}
+trap cleanup EXIT
+
 # Kiểm tra git repo
 if [ ! -d "$REPO_DIR/.git" ]; then
     echo -e "${RED}❌  Không phải git repo. Chạy lại từ thư mục gốc của project.${RESET}"
     exit 1
+fi
+
+if [ ! -f "$TOOLS_DIR/scripts/suggest_commit.py" ] || [ ! -f "$TOOLS_DIR/hooks/commit-msg" ]; then
+    echo -e "${YELLOW}📦  Không tìm thấy bộ tool đầy đủ cạnh install.sh.${RESET}"
+    echo -e "    Đang clone từ: $TOOLS_REPO_URL"
+
+    if ! command -v git >/dev/null 2>&1; then
+        echo -e "${RED}❌  Cần cài git để installer tự tải bộ tool.${RESET}"
+        exit 1
+    fi
+
+    TMP_TOOLS_DIR="$(mktemp -d "${TMPDIR:-/tmp}/weekly-report-tools.XXXXXX")"
+    git clone --depth 1 "$TOOLS_REPO_URL" "$TMP_TOOLS_DIR" >/dev/null 2>&1 || {
+        echo -e "${RED}❌  Không clone được weekly-report-tools từ GitHub.${RESET}"
+        echo "   Kiểm tra kết nối mạng hoặc đặt lại TOOLS_REPO_URL."
+        exit 1
+    }
+    TOOLS_DIR="$TMP_TOOLS_DIR"
 fi
 
 # Copy scripts vào repo
