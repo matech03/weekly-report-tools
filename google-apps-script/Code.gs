@@ -26,6 +26,14 @@ const SUMMARY_HEADERS = [
 const COMMIT_HEADERS = [
   "Week", "Member", "Repository", "Type", "Commit Date", "Hash", "Commit Message"
 ];
+const HEADER_BG = "#1F2937";
+const HEADER_TEXT = "#FFFFFF";
+const BORDER = "#E5E7EB";
+const TASK_BG = "#ECFDF5";
+const BUG_BG = "#FEF2F2";
+const OTHER_BG = "#F9FAFB";
+const EVEN_ROW_BG = "#F9FAFB";
+const WHITE = "#FFFFFF";
 // ─────────────────────────────────────────────────────────────
 
 function doPost(e) {
@@ -38,6 +46,7 @@ function doPost(e) {
     ensureSheetsExist();
     writeSummaryRow(data);
     writeCommitRows(data);
+    formatWorkbook();
     
     return ContentService
       .createTextOutput(JSON.stringify({ 
@@ -62,6 +71,7 @@ function doGet(e) {
 
 function ensureSheetsExist() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  ss.setSpreadsheetLocale("en_US");
   
   if (!ss.getSheetByName(SHEET_SUMMARY)) {
     const s = ss.insertSheet(SHEET_SUMMARY);
@@ -69,18 +79,13 @@ function ensureSheetsExist() {
   }
   const summary = ss.getSheetByName(SHEET_SUMMARY);
   summary.getRange(1, 1, 1, SUMMARY_HEADERS.length).setValues([SUMMARY_HEADERS]);
-  summary.getRange(1, 1, 1, SUMMARY_HEADERS.length).setFontWeight("bold").setBackground("#4A4FF5").setFontColor("#FFFFFF");
   
   if (!ss.getSheetByName(SHEET_COMMITS)) {
     const s = ss.insertSheet(SHEET_COMMITS);
     s.setFrozenRows(1);
-    // Cột message rộng hơn
-    s.setColumnWidth(7, 400);
   }
   const commits = ss.getSheetByName(SHEET_COMMITS);
   commits.getRange(1, 1, 1, COMMIT_HEADERS.length).setValues([COMMIT_HEADERS]);
-  commits.getRange(1, 1, 1, COMMIT_HEADERS.length).setFontWeight("bold").setBackground("#4A4FF5").setFontColor("#FFFFFF");
-  commits.setColumnWidth(7, 400);
 }
 
 function writeSummaryRow(data) {
@@ -105,11 +110,6 @@ function writeSummaryRow(data) {
     data.summary.total, data.summary.task, data.summary.bug, data.summary.other
   ]);
   
-  // Màu dòng xen kẽ
-  const lastRow = sheet.getLastRow();
-  if (lastRow % 2 === 0) {
-    sheet.getRange(lastRow, 1, 1, 8).setBackground("#F0F0FF");
-  }
 }
 
 function writeCommitRows(data) {
@@ -136,15 +136,122 @@ function writeCommitRows(data) {
     ]);
   });
   
-  // Highlight BUG rows màu đỏ nhạt
+}
+
+function formatWorkbook() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  ss.setSpreadsheetLocale("en_US");
+  formatSummarySheet(ss.getSheetByName(SHEET_SUMMARY));
+  formatCommitSheet(ss.getSheetByName(SHEET_COMMITS));
+}
+
+function formatSummarySheet(sheet) {
+  if (!sheet) return;
+  sheet.setHiddenGridlines(true);
+  sheet.setFrozenRows(1);
+  sheet.setColumnWidths(1, 1, 150);
+  sheet.setColumnWidths(2, 1, 160);
+  sheet.setColumnWidths(3, 1, 180);
+  sheet.setColumnWidths(4, 1, 180);
+  sheet.setColumnWidths(5, 1, 130);
+  sheet.setColumnWidths(6, 3, 90);
+  sheet.setRowHeight(1, 38);
+
+  const lastRow = Math.max(sheet.getLastRow(), 1);
+  const lastCol = SUMMARY_HEADERS.length;
+  formatHeader(sheet, lastCol);
+
+  if (lastRow > 1) {
+    const body = sheet.getRange(2, 1, lastRow - 1, lastCol);
+    body
+      .setFontFamily("Arial")
+      .setFontSize(10)
+      .setFontColor("#111827")
+      .setVerticalAlignment("middle")
+      .setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP)
+      .setBorder(true, true, true, true, true, true, BORDER, SpreadsheetApp.BorderStyle.SOLID);
+
+    for (let row = 2; row <= lastRow; row++) {
+      const bg = row % 2 === 0 ? EVEN_ROW_BG : WHITE;
+      sheet.getRange(row, 1, 1, lastCol).setBackground(bg);
+      sheet.setRowHeight(row, 32);
+    }
+    sheet.getRange(2, 5, lastRow - 1, 4).setHorizontalAlignment("center");
+  }
+
+  applyFilter(sheet, lastCol);
+}
+
+function formatCommitSheet(sheet) {
+  if (!sheet) return;
+  sheet.setHiddenGridlines(true);
+  sheet.setFrozenRows(1);
+  sheet.setColumnWidths(1, 1, 150);
+  sheet.setColumnWidths(2, 1, 180);
+  sheet.setColumnWidths(3, 1, 180);
+  sheet.setColumnWidths(4, 1, 90);
+  sheet.setColumnWidths(5, 1, 150);
+  sheet.setColumnWidths(6, 1, 90);
+  sheet.setColumnWidths(7, 1, 560);
+  sheet.setRowHeight(1, 38);
+
+  const lastRow = Math.max(sheet.getLastRow(), 1);
+  const lastCol = COMMIT_HEADERS.length;
+  formatHeader(sheet, lastCol);
+
+  if (lastRow > 1) {
+    const body = sheet.getRange(2, 1, lastRow - 1, lastCol);
+    body
+      .setFontFamily("Arial")
+      .setFontSize(10)
+      .setFontColor("#111827")
+      .setVerticalAlignment("top")
+      .setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP)
+      .setBorder(true, true, true, true, true, true, BORDER, SpreadsheetApp.BorderStyle.SOLID);
+
+    sheet.getRange(2, 4, lastRow - 1, 1).setHorizontalAlignment("center").setFontWeight("bold");
+    sheet.getRange(2, 6, lastRow - 1, 1).setFontFamily("Courier New").setHorizontalAlignment("center");
+    sheet.getRange(2, 7, lastRow - 1, 1).setHorizontalAlignment("left");
+    applyCommitTypeColors(sheet, lastRow, lastCol);
+  }
+
+  applyFilter(sheet, lastCol);
+}
+
+function formatHeader(sheet, lastCol) {
+  sheet.getRange(1, 1, 1, lastCol)
+    .setFontFamily("Arial")
+    .setFontSize(10)
+    .setFontWeight("bold")
+    .setFontColor(HEADER_TEXT)
+    .setBackground(HEADER_BG)
+    .setHorizontalAlignment("center")
+    .setVerticalAlignment("middle")
+    .setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP)
+    .setBorder(true, true, true, true, true, true, HEADER_BG, SpreadsheetApp.BorderStyle.SOLID);
+}
+
+function applyCommitTypeColors(sheet, lastRow, lastCol) {
   const allRows = sheet.getDataRange().getValues();
   for (let i = 1; i < allRows.length; i++) {
+    const row = i + 1;
     if (allRows[i][3] === "BUG") {
-      sheet.getRange(i + 1, 1, 1, 7).setBackground("#FFF0F0");
+      sheet.getRange(row, 1, 1, lastCol).setBackground(BUG_BG);
     } else if (allRows[i][3] === "TASK") {
-      sheet.getRange(i + 1, 1, 1, 7).setBackground("#F0FFF0");
+      sheet.getRange(row, 1, 1, lastCol).setBackground(TASK_BG);
     } else {
-      sheet.getRange(i + 1, 1, 1, 7).setBackground("#FFFFFF");
+      const bg = row % 2 === 0 ? OTHER_BG : WHITE;
+      sheet.getRange(row, 1, 1, lastCol).setBackground(bg);
     }
+    sheet.setRowHeight(row, 42);
   }
+}
+
+function applyFilter(sheet, lastCol) {
+  const existingFilter = sheet.getFilter();
+  if (existingFilter) {
+    existingFilter.remove();
+  }
+  const lastRow = Math.max(sheet.getLastRow(), 1);
+  sheet.getRange(1, 1, lastRow, lastCol).createFilter();
 }

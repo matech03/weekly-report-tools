@@ -253,6 +253,11 @@ The Apps Script writes two sheets.
 
 Type values are plain text: `TASK`, `BUG`, or `OTHER`.
 
+The Apps Script owns the report layout. Each submission reapplies header style,
+column widths, row heights, wrapping, filters, borders, and lightweight row
+colors. Manual formatting inside the report tables may be overwritten on the
+next submission.
+
 ## Troubleshooting
 
 ### No staged files
