@@ -1,0 +1,4 @@
+interface:
+  display_name: "Weekly Report Tools"
+  short_description: "Install and debug team report tooling"
+  default_prompt: "Use $weekly-report-tools to install or debug weekly commit reporting tools in this repository."
