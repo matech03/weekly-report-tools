@@ -16,6 +16,11 @@ import urllib.error
 from datetime import datetime, timedelta
 import argparse
 
+try:
+    import anthropic
+except ImportError:
+    anthropic = None
+
 # ── Màu terminal ─────────────────────────────────────────────
 GREEN  = "\033[92m"
 YELLOW = "\033[93m"
@@ -23,6 +28,21 @@ RED    = "\033[91m"
 CYAN   = "\033[96m"
 BOLD   = "\033[1m"
 RESET  = "\033[0m"
+
+PERFORMANCE_SYSTEM_PROMPT = """Bạn là trợ lý tổng hợp báo cáo tuần cho lập trình viên.
+
+Nhiệm vụ: đọc commit messages, stats và diff rút gọn để tóm tắt dev đã làm gì
+trong dự án trong tuần.
+
+Yêu cầu output:
+- Viết tiếng Việt.
+- 2-5 bullet, mỗi bullet một dòng.
+- Mỗi bullet tối đa 90 ký tự.
+- Tập trung vào kết quả/công việc chính, dễ nắm thông tin khi đọc lướt.
+- Mở đầu mỗi dòng bằng "- ".
+- Không đánh giá năng lực cá nhân, không chấm điểm.
+- Không bịa thông tin ngoài nội dung commit/diff.
+- Chỉ trả về nội dung để ghi vào một ô Google Sheets, không giải thích thêm."""
 
 def load_config():
     """Load config từ file .env cùng thư mục script, hoặc env var."""
@@ -46,6 +66,12 @@ def load_config():
     config["REPORT_SECRET"] = os.environ.get(
         "REPORT_SECRET", config.get("REPORT_SECRET", "")
     )
+    config["ANTHROPIC_API_KEY"] = os.environ.get(
+        "ANTHROPIC_API_KEY", config.get("ANTHROPIC_API_KEY", "")
+    )
+    config["ANTHROPIC_MODEL"] = os.environ.get(
+        "ANTHROPIC_MODEL", config.get("ANTHROPIC_MODEL", "claude-sonnet-4-6")
+    )
     return config
 
 def get_week_range(week_str=None):
@@ -64,6 +90,11 @@ def get_week_range(week_str=None):
         start = today - timedelta(days=today.weekday())  # Thứ 2
     end = start + timedelta(days=6)  # Chủ nhật
     return start, end
+
+def get_week_id(start):
+    """Trả về ISO week id dạng YYYY-Www."""
+    iso_year, iso_week, _ = start.isocalendar()
+    return f"{iso_year}-W{iso_week:02d}"
 
 def get_git_author():
     """Lấy tên tác giả từ git config."""
@@ -93,6 +124,7 @@ def fetch_commits(author, since, until):
             f"--author={author}",
             f"--since={since_str}",
             f"--until={until_str}",
+            "--no-merges",
             "--pretty=format:%H|%ad|%s",
             "--date=format:%Y-%m-%d %H:%M",
             "--all"
@@ -118,6 +150,7 @@ def fetch_commits(author, since, until):
                           "BUG"  if msg.startswith("BUG:")  else "OTHER"
             commits.append({
                 "hash": hash_[:7],
+                "full_hash": hash_,
                 "date": date,
                 "message": msg.strip(),
                 "type": commit_type
@@ -125,7 +158,123 @@ def fetch_commits(author, since, until):
 
     return commits
 
-def print_summary(author, repo, week_label, commits):
+def get_commit_change_context(commits, max_chars=12000, per_commit_chars=2500):
+    """Lấy diff rút gọn của các commit để AI tổng hợp performance."""
+    chunks = []
+    remaining = max_chars
+
+    for commit in commits:
+        if remaining <= 0:
+            break
+
+        full_hash = commit.get("full_hash") or commit.get("hash")
+        result = subprocess.run(
+            [
+                "git", "show",
+                "--stat",
+                "--patch",
+                "--find-renames",
+                "--find-copies",
+                "--no-ext-diff",
+                "--unified=3",
+                "--format=commit %H%nDate: %ad%nMessage: %s",
+                "--date=format:%Y-%m-%d %H:%M",
+                full_hash,
+            ],
+            capture_output=True,
+            text=True,
+            errors="replace"
+        )
+        if result.returncode != 0 or not result.stdout.strip():
+            continue
+
+        text = result.stdout.strip()
+        if len(text) > per_commit_chars:
+            text = text[:per_commit_chars] + "\n...[diff truncated]"
+        if len(text) > remaining:
+            text = text[:remaining] + "\n...[weekly context truncated]"
+
+        chunks.append(text)
+        remaining -= len(text)
+
+    return "\n\n---\n\n".join(chunks)
+
+def normalize_performance_notes(text, max_lines=5, max_line_chars=90):
+    """Chuẩn hóa summary notes thành các ý ngắn, dễ đọc trong một cell."""
+    if not text:
+        return ""
+
+    lines = []
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        line = line.lstrip("-*•0123456789. )\t").strip()
+        if not line:
+            continue
+        if len(line) > max_line_chars:
+            line = line[:max_line_chars - 1].rstrip(" ,.;:-") + "..."
+        lines.append(f"- {line}")
+        if len(lines) >= max_lines:
+            break
+
+    return "\n".join(lines)
+
+def analyze_performance(config, author, repo, week_label, commits):
+    """Tổng hợp một vài note công việc trong tuần. Lỗi thì trả về chuỗi rỗng."""
+    api_key = config.get("ANTHROPIC_API_KEY", "")
+    if not api_key or anthropic is None:
+        return ""
+
+    change_context = get_commit_change_context(commits)
+    if not change_context:
+        return ""
+
+    commit_lines = "\n".join(
+        f"- [{c['hash']}] {c['date']} {c['type']}: {c['message']}"
+        for c in commits
+    )
+    user_message = f"""Author: {author}
+Repository: {repo}
+Week: {week_label}
+
+=== COMMITS ===
+{commit_lines}
+
+=== CODE CHANGES ===
+{change_context}
+
+Hãy tổng hợp các điểm chính dev đã làm trong tuần để ghi vào cột Summary."""
+
+    try:
+        client = anthropic.Anthropic(api_key=api_key)
+        message = client.messages.create(
+            model=config.get("ANTHROPIC_MODEL", "claude-sonnet-4-6"),
+            max_tokens=500,
+            system=PERFORMANCE_SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": user_message}]
+        )
+        text = message.content[0].text.strip()
+    except Exception:
+        return ""
+
+    return normalize_performance_notes(text)
+
+def read_performance_override(args):
+    """Nhận summary notes do agent đang chạy report tự tổng hợp."""
+    if args.performance_file:
+        try:
+            with open(args.performance_file, "r", encoding="utf-8") as f:
+                return normalize_performance_notes(f.read())
+        except Exception:
+            return ""
+
+    if args.performance:
+        return normalize_performance_notes(args.performance)
+
+    return ""
+
+def print_summary(author, repo, week_label, commits, performance=""):
     tasks = [c for c in commits if c["type"] == "TASK"]
     bugs  = [c for c in commits if c["type"] == "BUG"]
     other = [c for c in commits if c["type"] == "OTHER"]
@@ -156,6 +305,14 @@ def print_summary(author, repo, week_label, commits):
         print(f"\n{YELLOW}  ⚠️  OTHER (không đúng format) ({len(other)}){RESET}")
         for c in other:
             print(f"     [{c['hash']}] {c['date']}  {c['message']}")
+
+    if performance:
+        print(f"\n{CYAN}{BOLD}  📌 SUMMARY NOTES{RESET}")
+        for line in performance.splitlines():
+            if line.strip():
+                print(f"     {line.strip()}")
+    else:
+        print(f"\n{YELLOW}  📌 SUMMARY NOTES: để trống (không phân tích được hoặc chưa cấu hình AI){RESET}")
 
     print(f"\n{CYAN}{'═'*58}{RESET}\n")
 
@@ -219,6 +376,10 @@ def main():
     parser.add_argument("--author", help="Override tên tác giả")
     parser.add_argument("--dry-run", action="store_true",
                         help="Chỉ in ra màn hình, không gửi lên Sheets")
+    parser.add_argument("--performance",
+                        help="Summary notes do agent tổng hợp sẵn")
+    parser.add_argument("--performance-file",
+                        help="File chứa summary notes do agent tổng hợp sẵn")
     args = parser.parse_args()
 
     config = load_config()
@@ -232,12 +393,13 @@ def main():
 
     # Xác định tuần
     start, end = get_week_range(args.week)
-    week_label = f"{start.strftime('%d/%m')} – {end.strftime('%d/%m/%Y')}"
+    week_id = get_week_id(start)
+    week_range = f"{start.strftime('%d/%m')} – {end.strftime('%d/%m/%Y')}"
 
     repo = get_repo_name()
 
     print(f"\n🔍  Đang lấy commits của {BOLD}{author}{RESET} "
-          f"({week_label})...")
+          f"({week_id}: {week_range})...")
 
     commits = fetch_commits(author, start, end)
 
@@ -246,7 +408,18 @@ def main():
         print("   Kiểm tra lại: git log --author='<tên>' --since='7 days ago'")
         sys.exit(0)
 
-    print_summary(author, repo, week_label, commits)
+    performance = read_performance_override(args)
+    if performance:
+        print(f"🧠  Summary notes: {GREEN}dùng nội dung do agent tổng hợp{RESET}")
+    else:
+        print(f"🧠  Đang phân tích thay đổi code để tổng hợp summary...", end=" ", flush=True)
+        performance = analyze_performance(config, author, repo, week_id, commits)
+        if performance:
+            print(f"{GREEN}xong{RESET}")
+        else:
+            print(f"{YELLOW}bỏ qua{RESET}")
+
+    print_summary(author, repo, f"{week_id} ({week_range})", commits, performance)
 
     # Gửi lên Sheets
     if args.dry_run:
@@ -268,8 +441,10 @@ def main():
     payload = {
         "author": author,
         "repo": repo,
-        "week": week_label,
+        "week": week_id,
         "week_start": start.strftime("%Y-%m-%d"),
+        "week_end": end.strftime("%Y-%m-%d"),
+        "week_range": week_range,
         "submitted_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
         "secret": config.get("REPORT_SECRET", ""),
         "summary": {
@@ -278,6 +453,8 @@ def main():
             "bug":  len([c for c in commits if c["type"] == "BUG"]),
             "other": len([c for c in commits if c["type"] == "OTHER"]),
         },
+        "summary_note": performance,
+        "performance": performance,
         "commits": commits
     }
 

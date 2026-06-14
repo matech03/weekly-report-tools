@@ -25,6 +25,14 @@ git-team-tools/
 ├── scripts/
 │   ├── suggest_commit.py
 │   └── report.py
+├── codex-skills/
+│   └── weekly-report/
+│       └── SKILL.md
+├── claude-skills/
+│   └── weekly-report/
+│       └── SKILL.md
+├── claude-commands/
+│   └── report.md
 └── google-apps-script/
     └── Code.gs
 ```
@@ -81,10 +89,13 @@ bash /path/to/git-team-tools/install.sh
 The installer will:
 
 - Copy `suggest_commit.py` and `report.py` into `.team-tools/`
+- Copy the local Codex weekly report skill into `.codex/skills/weekly-report/`
+- Copy the local Claude weekly report skill into `.claude/skills/weekly-report/`
+- Copy the local Claude slash command into `.claude/commands/report.md`
 - Install `hooks/commit-msg` into `.git/hooks/commit-msg`
 - Back up an existing `commit-msg` hook before replacing it
 - Create `.team-tools/.env` if it does not exist
-- Add `.team-tools/.env` to the project `.gitignore`
+- Add `.team-tools/` to the project `.gitignore`
 
 Advanced: override the source repository used by the bootstrap installer:
 
@@ -217,6 +228,46 @@ Submit the current week to Google Sheets:
 python .team-tools/report.py
 ```
 
+The report payload supports a `Summary` notes column. When Codex or
+Claude runs the local skill, the current agent should inspect the weekly commits
+and code changes, summarize 2-5 short bullet notes about what the developer
+worked on, and pass them to the script. Each bullet should be easy to scan and
+under 90 characters:
+
+```bash
+python .team-tools/report.py --performance-file /tmp/performance.txt
+```
+
+If no performance notes are passed, `report.py` tries a best-effort Anthropic
+fallback when `ANTHROPIC_API_KEY` is configured. If the agent/fallback cannot
+analyze the changes or hits an error, the `Summary` column is left blank and
+the report still submits.
+
+If you use Codex in a project where the installer has been run, you can also
+trigger the local project skill with:
+
+```text
+report
+```
+
+This submits the current week to Google Sheets by default. To preview without
+sending, ask explicitly:
+
+```text
+preview report
+xem trước report
+```
+
+If you use Claude Code in a project where the installer has been run, you can
+use the local skill with the same prompt, or use the project slash command:
+
+```text
+/report
+```
+
+Claude follows the same rule: `report` submits, while `preview report` or
+`xem trước report` runs a dry run.
+
 Submit a specific ISO week:
 
 ```bash
@@ -229,21 +280,37 @@ Override author:
 python .team-tools/report.py --author "Nguyen Van A"
 ```
 
+With the local Codex/Claude skill, prompts such as `báo cáo tuần của dev3`
+should be treated as:
+
+```bash
+python .team-tools/report.py --author "dev3"
+```
+
+If no commits are found for that author/week, the script stops without
+submitting anything.
+
 The report script reads commits from all refs with:
 
 ```text
-git log --author=<author> --since=<week start> --until=<week end> --all
+git log --author=<author> --since=<week start> --until=<week end> --no-merges --all
 ```
 
 ## Google Sheets Output
 
-The Apps Script writes two sheets.
+The Apps Script writes three sheets.
 
 ### Summary
 
-| Week | Submitted At | Member | Repository | Total Commits | Tasks | Bugs | Other |
-|------|--------------|--------|------------|---------------|-------|------|-------|
-| 09/06 - 15/06/2025 | 2025-06-13 17:30 | Nguyen Van A | mobile-app | 8 | 6 | 2 | 0 |
+| Week | Submitted At | Member | Repository | Total Commits | Tasks | Bugs | Other | Summary |
+|------|--------------|--------|------------|---------------|-------|------|-------|---------|
+| 2025-W24 | 2025-06-13 17:30 | Nguyen Van A | mobile-app | 8 | 6 | 2 | 0 | - Hoàn thiện luồng đăng nhập<br>- Sửa crash khi mở app |
+
+### Weeks
+
+| Week | Start Date | End Date | Date Range |
+|------|------------|----------|------------|
+| 2025-W24 | 2025-06-09 | 2025-06-15 | 09/06 – 15/06/2025 |
 
 ### Commits
 

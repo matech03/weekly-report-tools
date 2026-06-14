@@ -9,6 +9,9 @@ TOOLS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(pwd)"
 GIT_HOOKS_DIR="$REPO_DIR/.git/hooks"
 SCRIPTS_TARGET="$REPO_DIR/.team-tools"
+CODEX_SKILL_TARGET="$REPO_DIR/.codex/skills/weekly-report"
+CLAUDE_SKILL_TARGET="$REPO_DIR/.claude/skills/weekly-report"
+CLAUDE_COMMANDS_TARGET="$REPO_DIR/.claude/commands"
 TMP_TOOLS_DIR=""
 
 GREEN="\033[92m"
@@ -37,9 +40,12 @@ if [ ! -d "$REPO_DIR/.git" ]; then
     exit 1
 fi
 
-if [ ! -f "$TOOLS_DIR/scripts/suggest_commit.py" ] || [ ! -f "$TOOLS_DIR/hooks/commit-msg" ]; then
-    echo -e "${YELLOW}📦  Không tìm thấy bộ tool đầy đủ cạnh install.sh.${RESET}"
-    echo -e "    Đang clone từ: $TOOLS_REPO_URL"
+if [ ! -f "$TOOLS_DIR/scripts/suggest_commit.py" ] || \
+   [ ! -f "$TOOLS_DIR/hooks/commit-msg" ] || \
+   [ ! -f "$TOOLS_DIR/codex-skills/weekly-report/SKILL.md" ] || \
+   [ ! -f "$TOOLS_DIR/claude-skills/weekly-report/SKILL.md" ] || \
+   [ ! -f "$TOOLS_DIR/claude-commands/report.md" ]; then
+    echo -e "${YELLOW}📦  Đang chuẩn bị download tools"
 
     if ! command -v git >/dev/null 2>&1; then
         echo -e "${RED}❌  Cần cài git để installer tự tải bộ tool.${RESET}"
@@ -60,6 +66,17 @@ echo -e "📁  Tạo thư mục .team-tools/..."
 mkdir -p "$SCRIPTS_TARGET"
 cp "$TOOLS_DIR/scripts/suggest_commit.py" "$SCRIPTS_TARGET/"
 cp "$TOOLS_DIR/scripts/report.py" "$SCRIPTS_TARGET/"
+
+# Cài Codex skill local trong project
+echo -e "🤖  Cài đặt Codex skill local..."
+mkdir -p "$CODEX_SKILL_TARGET"
+cp "$TOOLS_DIR/codex-skills/weekly-report/SKILL.md" "$CODEX_SKILL_TARGET/SKILL.md"
+
+# Cài Claude skill và slash command local trong project
+echo -e "🧠  Cài đặt Claude skill local..."
+mkdir -p "$CLAUDE_SKILL_TARGET" "$CLAUDE_COMMANDS_TARGET"
+cp "$TOOLS_DIR/claude-skills/weekly-report/SKILL.md" "$CLAUDE_SKILL_TARGET/SKILL.md"
+cp "$TOOLS_DIR/claude-commands/report.md" "$CLAUDE_COMMANDS_TARGET/report.md"
 
 # Cài commit-msg hook
 echo -e "🔗  Cài đặt commit-msg hook..."
@@ -84,16 +101,20 @@ SHEETS_WEBHOOK_URL="https://script.google.com/macros/s/AKfycbzIJt8MeIWavTEM_d0oY
 
 # Optional: đặt cùng giá trị với REPORT_SECRET trong Apps Script
 # REPORT_SECRET="change-me"
+
+# Optional: bật phân tích Performance trong báo cáo tuần
+# ANTHROPIC_API_KEY="sk-ant-..."
+# ANTHROPIC_MODEL="claude-sonnet-4-6"
 EOF
 fi
 
-# Thêm .team-tools/.env vào .gitignore
+# Thêm .team-tools/ vào .gitignore
 touch "$REPO_DIR/.gitignore"
-if ! grep -q "^.team-tools/.env$" "$REPO_DIR/.gitignore"; then
+if ! grep -q "^.team-tools/$" "$REPO_DIR/.gitignore"; then
     echo "" >> "$REPO_DIR/.gitignore"
     echo "# git-team-tools" >> "$REPO_DIR/.gitignore"
-    echo ".team-tools/.env" >> "$REPO_DIR/.gitignore"
-    echo -e "🙈  Đã thêm .team-tools/.env vào .gitignore"
+    echo ".team-tools/" >> "$REPO_DIR/.gitignore"
+    echo -e "🙈  Đã thêm .team-tools/ vào .gitignore"
 fi
 
 # Tạo alias gợi ý
@@ -111,8 +132,15 @@ echo -e "    git commit -m \"TASK: Mô tả công việc\""
 echo -e "    git commit -m \"BUG: Sửa lỗi gì đó\""
 echo ""
 echo -e "  ${BOLD}Tạo báo cáo tuần:${RESET}"
-echo -e "    python .team-tools/report.py"
-echo -e "    python .team-tools/report.py --dry-run   # chỉ xem, không gửi"
+echo -e "    python .team-tools/report.py             # gửi lên Google Sheets"
+echo -e "    python .team-tools/report.py --dry-run   # preview/xem trước, không gửi"
 echo ""
-echo -e "  ${YELLOW}🔗  Nhớ điền SHEETS_WEBHOOK_URL trong .team-tools/.env${RESET}"
+echo -e "  ${BOLD}Codex skill local:${RESET}"
+echo -e "    Gõ lệnh: report                  # gửi luôn"
+echo -e "    Gõ lệnh: preview report          # chỉ xem trước"
+echo ""
+echo -e "  ${BOLD}Claude local:${RESET}"
+echo -e "    Gõ lệnh: report                  # gửi luôn"
+echo -e "    Gõ lệnh: preview report          # chỉ xem trước"
+echo -e "    Hoặc dùng slash command: /report"
 echo ""
