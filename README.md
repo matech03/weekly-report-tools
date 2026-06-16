@@ -301,9 +301,9 @@ The Apps Script writes three sheets.
 
 ### Summary
 
-| Week | Submitted At | Member | Repository | Total Commits | Tasks | Bugs | Other | Summary |
-|------|--------------|--------|------------|---------------|-------|------|-------|---------|
-| 2025-W24 | 2025-06-13 17:30 | Nguyen Van A | mobile-app | 8 | 6 | 2 | 0 | - Hoàn thiện luồng đăng nhập<br>- Sửa crash khi mở app |
+| Week | Submitted At | Member | Repository | Total Commits | Tasks | Bugs | Other | Summary | Note |
+|------|--------------|--------|------------|---------------|-------|------|-------|---------|------|
+| 2025-W24 | 2025-06-13 17:30 | Nguyen Van A | mobile-app | 8 | 6 | 2 | 0 | - Hoàn thiện luồng đăng nhập<br>- Sửa crash khi mở app | Cần follow up QA |
 
 ### Weeks
 
@@ -318,6 +318,10 @@ The Apps Script writes three sheets.
 | 09/06 - 15/06/2025 | Nguyen Van A | mobile-app | TASK | 2025-06-10 09:15 | a1b2c3d | TASK: Thêm màn hình login |
 
 Type values are plain text: `TASK`, `BUG`, or `OTHER`.
+
+The `Summary` column is updated by each report submission. The `Note` column is
+for manual edits directly in Google Sheets; when the same week/member/repository
+is submitted again, the existing `Note` value is preserved.
 
 The Apps Script owns the report layout. Each submission reapplies header style,
 column widths, row heights, wrapping, filters, borders, and lightweight row

@@ -22,7 +22,7 @@ const SHEET_COMMITS  = "Commits";   // Sheet chi tiết từng commit
 const SHEET_WEEKS    = "Weeks";     // Sheet đối chiếu ISO week với ngày
 const SUMMARY_HEADERS = [
   "Week", "Submitted At", "Member", "Repository",
-  "Total Commits", "Tasks", "Bugs", "Other", "Summary"
+  "Total Commits", "Tasks", "Bugs", "Other", "Summary", "Note"
 ];
 const COMMIT_HEADERS = [
   "Week", "Member", "Repository", "Type", "Commit Date", "Hash", "Commit Message"
@@ -77,19 +77,21 @@ function doGet(e) {
 function ensureSheetsExist() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   ss.setSpreadsheetLocale("en_US");
-  
+
   if (!ss.getSheetByName(SHEET_SUMMARY)) {
     const s = ss.insertSheet(SHEET_SUMMARY);
     s.setFrozenRows(1);
   }
   const summary = ss.getSheetByName(SHEET_SUMMARY);
+  ensureColumnCount(summary, SUMMARY_HEADERS.length);
   summary.getRange(1, 1, 1, SUMMARY_HEADERS.length).setValues([SUMMARY_HEADERS]);
-  
+
   if (!ss.getSheetByName(SHEET_COMMITS)) {
     const s = ss.insertSheet(SHEET_COMMITS);
     s.setFrozenRows(1);
   }
   const commits = ss.getSheetByName(SHEET_COMMITS);
+  ensureColumnCount(commits, COMMIT_HEADERS.length);
   commits.getRange(1, 1, 1, COMMIT_HEADERS.length).setValues([COMMIT_HEADERS]);
 
   if (!ss.getSheetByName(SHEET_WEEKS)) {
@@ -97,7 +99,15 @@ function ensureSheetsExist() {
     s.setFrozenRows(1);
   }
   const weeks = ss.getSheetByName(SHEET_WEEKS);
+  ensureColumnCount(weeks, WEEK_HEADERS.length);
   weeks.getRange(1, 1, 1, WEEK_HEADERS.length).setValues([WEEK_HEADERS]);
+}
+
+function ensureColumnCount(sheet, count) {
+  const missing = count - sheet.getMaxColumns();
+  if (missing > 0) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), missing);
+  }
 }
 
 function writeWeekRow(data) {
@@ -129,20 +139,21 @@ function writeSummaryRow(data) {
   const values = sheet.getDataRange().getValues();
   for (let i = 1; i < values.length; i++) {
     if (values[i][0] === data.week && values[i][2] === data.author && values[i][3] === data.repo) {
+      const note = values[i][9] === undefined ? "" : values[i][9];
       sheet.getRange(i + 1, 1, 1, SUMMARY_HEADERS.length).setValues([[
         data.week, data.submitted_at, data.author, data.repo,
         data.summary.total, data.summary.task, data.summary.bug, data.summary.other,
-        data.summary_note || data.performance || ""
+        data.summary_note || data.performance || "", note
       ]]);
       return;
     }
   }
-  
+
   // Thêm row mới
   sheet.appendRow([
     data.week, data.submitted_at, data.author, data.repo,
     data.summary.total, data.summary.task, data.summary.bug, data.summary.other,
-    data.summary_note || data.performance || ""
+    data.summary_note || data.performance || "", ""
   ]);
   
 }
@@ -192,6 +203,7 @@ function formatSummarySheet(sheet) {
   sheet.setColumnWidths(5, 1, 130);
   sheet.setColumnWidths(6, 3, 90);
   sheet.setColumnWidths(9, 1, 520);
+  sheet.setColumnWidths(10, 1, 360);
   sheet.setRowHeight(1, 38);
 
   const lastRow = Math.max(sheet.getLastRow(), 1);
@@ -214,7 +226,7 @@ function formatSummarySheet(sheet) {
       sheet.setRowHeight(row, 32);
     }
     sheet.getRange(2, 5, lastRow - 1, 4).setHorizontalAlignment("center");
-    sheet.getRange(2, 9, lastRow - 1, 1).setHorizontalAlignment("left");
+    sheet.getRange(2, 9, lastRow - 1, 2).setHorizontalAlignment("left");
   }
 
   applyFilter(sheet, lastCol);
