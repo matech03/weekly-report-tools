@@ -102,9 +102,6 @@ SHEETS_WEBHOOK_URL="https://script.google.com/macros/s/AKfycbzIJt8MeIWavTEM_d0oY
 # Optional: đặt cùng giá trị với REPORT_SECRET trong Apps Script
 # REPORT_SECRET="change-me"
 
-# Optional: bật phân tích Performance trong báo cáo tuần
-# ANTHROPIC_API_KEY="sk-ant-..."
-# ANTHROPIC_MODEL="claude-sonnet-4-6"
 EOF
 fi
 

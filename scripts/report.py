@@ -16,11 +16,6 @@ import urllib.error
 from datetime import datetime, timedelta
 import argparse
 
-try:
-    import anthropic
-except ImportError:
-    anthropic = None
-
 # ── Màu terminal ─────────────────────────────────────────────
 GREEN  = "\033[92m"
 YELLOW = "\033[93m"
@@ -28,21 +23,6 @@ RED    = "\033[91m"
 CYAN   = "\033[96m"
 BOLD   = "\033[1m"
 RESET  = "\033[0m"
-
-PERFORMANCE_SYSTEM_PROMPT = """Bạn là trợ lý tổng hợp báo cáo tuần cho lập trình viên.
-
-Nhiệm vụ: đọc commit messages, stats và diff rút gọn để tóm tắt dev đã làm gì
-trong dự án trong tuần.
-
-Yêu cầu output:
-- Viết tiếng Việt.
-- 2-5 bullet, mỗi bullet một dòng.
-- Mỗi bullet tối đa 90 ký tự.
-- Tập trung vào kết quả/công việc chính, dễ nắm thông tin khi đọc lướt.
-- Mở đầu mỗi dòng bằng "- ".
-- Không đánh giá năng lực cá nhân, không chấm điểm.
-- Không bịa thông tin ngoài nội dung commit/diff.
-- Chỉ trả về nội dung để ghi vào một ô Google Sheets, không giải thích thêm."""
 
 def load_config():
     """Load config từ file .env cùng thư mục script, hoặc env var."""
@@ -65,12 +45,6 @@ def load_config():
     )
     config["REPORT_SECRET"] = os.environ.get(
         "REPORT_SECRET", config.get("REPORT_SECRET", "")
-    )
-    config["ANTHROPIC_API_KEY"] = os.environ.get(
-        "ANTHROPIC_API_KEY", config.get("ANTHROPIC_API_KEY", "")
-    )
-    config["ANTHROPIC_MODEL"] = os.environ.get(
-        "ANTHROPIC_MODEL", config.get("ANTHROPIC_MODEL", "claude-sonnet-4-6")
     )
     return config
 
@@ -158,47 +132,6 @@ def fetch_commits(author, since, until):
 
     return commits
 
-def get_commit_change_context(commits, max_chars=12000, per_commit_chars=2500):
-    """Lấy diff rút gọn của các commit để AI tổng hợp performance."""
-    chunks = []
-    remaining = max_chars
-
-    for commit in commits:
-        if remaining <= 0:
-            break
-
-        full_hash = commit.get("full_hash") or commit.get("hash")
-        result = subprocess.run(
-            [
-                "git", "show",
-                "--stat",
-                "--patch",
-                "--find-renames",
-                "--find-copies",
-                "--no-ext-diff",
-                "--unified=3",
-                "--format=commit %H%nDate: %ad%nMessage: %s",
-                "--date=format:%Y-%m-%d %H:%M",
-                full_hash,
-            ],
-            capture_output=True,
-            text=True,
-            errors="replace"
-        )
-        if result.returncode != 0 or not result.stdout.strip():
-            continue
-
-        text = result.stdout.strip()
-        if len(text) > per_commit_chars:
-            text = text[:per_commit_chars] + "\n...[diff truncated]"
-        if len(text) > remaining:
-            text = text[:remaining] + "\n...[weekly context truncated]"
-
-        chunks.append(text)
-        remaining -= len(text)
-
-    return "\n\n---\n\n".join(chunks)
-
 def normalize_performance_notes(text, max_lines=5, max_line_chars=90):
     """Chuẩn hóa summary notes thành các ý ngắn, dễ đọc trong một cell."""
     if not text:
@@ -219,46 +152,6 @@ def normalize_performance_notes(text, max_lines=5, max_line_chars=90):
             break
 
     return "\n".join(lines)
-
-def analyze_performance(config, author, repo, week_label, commits):
-    """Tổng hợp một vài note công việc trong tuần. Lỗi thì trả về chuỗi rỗng."""
-    api_key = config.get("ANTHROPIC_API_KEY", "")
-    if not api_key or anthropic is None:
-        return ""
-
-    change_context = get_commit_change_context(commits)
-    if not change_context:
-        return ""
-
-    commit_lines = "\n".join(
-        f"- [{c['hash']}] {c['date']} {c['type']}: {c['message']}"
-        for c in commits
-    )
-    user_message = f"""Author: {author}
-Repository: {repo}
-Week: {week_label}
-
-=== COMMITS ===
-{commit_lines}
-
-=== CODE CHANGES ===
-{change_context}
-
-Hãy tổng hợp các điểm chính dev đã làm trong tuần để ghi vào cột Summary."""
-
-    try:
-        client = anthropic.Anthropic(api_key=api_key)
-        message = client.messages.create(
-            model=config.get("ANTHROPIC_MODEL", "claude-sonnet-4-6"),
-            max_tokens=500,
-            system=PERFORMANCE_SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": user_message}]
-        )
-        text = message.content[0].text.strip()
-    except Exception:
-        return ""
-
-    return normalize_performance_notes(text)
 
 def read_performance_override(args):
     """Nhận summary notes do agent đang chạy report tự tổng hợp."""
@@ -312,7 +205,7 @@ def print_summary(author, repo, week_label, commits, performance=""):
             if line.strip():
                 print(f"     {line.strip()}")
     else:
-        print(f"\n{YELLOW}  📌 SUMMARY NOTES: để trống (không phân tích được hoặc chưa cấu hình AI){RESET}")
+        print(f"\n{YELLOW}  📌 SUMMARY NOTES: để trống (agent không cung cấp summary){RESET}")
 
     print(f"\n{CYAN}{'═'*58}{RESET}\n")
 
@@ -412,12 +305,7 @@ def main():
     if performance:
         print(f"🧠  Summary notes: {GREEN}dùng nội dung do agent tổng hợp{RESET}")
     else:
-        print(f"🧠  Đang phân tích thay đổi code để tổng hợp summary...", end=" ", flush=True)
-        performance = analyze_performance(config, author, repo, week_id, commits)
-        if performance:
-            print(f"{GREEN}xong{RESET}")
-        else:
-            print(f"{YELLOW}bỏ qua{RESET}")
+        print(f"🧠  Summary notes: {YELLOW}không có nội dung từ agent, để trống{RESET}")
 
     print_summary(author, repo, f"{week_id} ({week_range})", commits, performance)
 

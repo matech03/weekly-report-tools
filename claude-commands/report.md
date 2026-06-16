@@ -29,8 +29,8 @@ avoid paragraphs or long explanations.
   ```
 
   The script sends the `Summary` notes to Google Sheets. If the current
-  agent cannot analyze the changes, omit `--performance-file`; the script will
-  try a best-effort fallback and leave the field blank if that also fails.
+  agent cannot analyze the changes, omit `--performance-file`; the Summary
+  field will be left blank.
 
 - If the user explicitly asks to `preview`, `xem trước`, `xem truoc`,
   `xem thử`, `xem thu`, or `dry-run`, run:
@@ -57,9 +57,9 @@ avoid paragraphs or long explanations.
 Before running, verify `.team-tools/report.py` exists. If it is missing, explain
 that weekly-report-tools has not been installed in this project.
 
-Summary analysis is best-effort. The current agent should do it first. Do
-not block the report if the agent cannot analyze the changes, the fallback AI
-dependency/API key is unavailable, or the analysis call fails.
+Summary analysis is best-effort. The current agent should do it before running
+`report.py`. Do not block the report if the agent cannot analyze the changes;
+omit `--performance-file` and submit with a blank Summary field.
 
 The report excludes merge commits. If the selected author/week has no commits,
 the script exits without submitting anything; report that result to the user.

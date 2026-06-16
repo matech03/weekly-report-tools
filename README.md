@@ -238,10 +238,9 @@ under 90 characters:
 python .team-tools/report.py --performance-file /tmp/performance.txt
 ```
 
-If no performance notes are passed, `report.py` tries a best-effort Anthropic
-fallback when `ANTHROPIC_API_KEY` is configured. If the agent/fallback cannot
-analyze the changes or hits an error, the `Summary` column is left blank and
-the report still submits.
+If no performance notes are passed, the `Summary` column is left blank and
+the report still submits. Summary generation is handled by the current
+Claude/Codex agent before it calls `report.py`.
 
 If you use Codex in a project where the installer has been run, you can also
 trigger the local project skill with:

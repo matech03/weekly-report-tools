@@ -91,8 +91,8 @@ Treat these as requests to use this skill:
    ```
 
    The script sends the `Summary` notes to Google Sheets. If the agent
-   cannot analyze the changes, omit `--performance-file`; the script will try a
-   best-effort fallback and leave the field blank if that also fails.
+   cannot analyze the changes, omit `--performance-file`; the Summary field
+   will be left blank.
 
 5. Only preview when the user explicitly asks with words such as `preview`,
    `xem trước`, `xem truoc`, `xem thử`, `xem thu`, or `dry-run`:
@@ -125,9 +125,9 @@ Treat these as requests to use this skill:
   submitting anything; report that result to the user.
 - Use `--dry-run` only when the request explicitly asks to preview or view
   before sending.
-- Summary analysis is best-effort. The current agent should do it first.
-  Do not block the report if the agent cannot analyze the changes, the fallback
-  AI dependency/API key is unavailable, or the analysis call fails.
+- Summary analysis is best-effort. The current agent should do it before
+  running `report.py`. Do not block the report if the agent cannot analyze the
+  changes; omit `--performance-file` and submit with a blank Summary field.
 - If `SHEETS_WEBHOOK_URL` is missing, invalid, or the Apps Script endpoint
   returns an auth/deployment error, summarize the exact error and the next
   configuration step.
