@@ -120,8 +120,9 @@ def fetch_commits(author, since, until):
         parts = line.split("|", 2)
         if len(parts) == 3:
             hash_, date, msg = parts
-            commit_type = "TASK" if msg.startswith("TASK:") else \
-                          "BUG"  if msg.startswith("BUG:")  else "OTHER"
+            commit_type = "TASK"   if msg.startswith("TASK:")   else \
+                          "BUG"    if msg.startswith("BUG:")    else \
+                          "UPDATE" if msg.startswith("UPDATE:") else "OTHER"
             commits.append({
                 "hash": hash_[:7],
                 "full_hash": hash_,
@@ -168,9 +169,10 @@ def read_performance_override(args):
     return ""
 
 def print_summary(author, repo, week_label, commits, performance=""):
-    tasks = [c for c in commits if c["type"] == "TASK"]
-    bugs  = [c for c in commits if c["type"] == "BUG"]
-    other = [c for c in commits if c["type"] == "OTHER"]
+    tasks   = [c for c in commits if c["type"] == "TASK"]
+    bugs    = [c for c in commits if c["type"] == "BUG"]
+    updates = [c for c in commits if c["type"] == "UPDATE"]
+    other   = [c for c in commits if c["type"] == "OTHER"]
 
     print(f"\n{BOLD}{CYAN}{'═'*58}{RESET}")
     print(f"{BOLD}  📋  WEEKLY REPORT{RESET}")
@@ -181,6 +183,7 @@ def print_summary(author, repo, week_label, commits, performance=""):
     print(f"  📊  Tổng   : {len(commits)} commits  "
           f"({GREEN}{len(tasks)} TASK{RESET} / "
           f"{RED}{len(bugs)} BUG{RESET} / "
+          f"{CYAN}{len(updates)} UPDATE{RESET} / "
           f"{YELLOW}{len(other)} other{RESET})")
     print(f"{CYAN}{'─'*58}{RESET}")
 
@@ -192,6 +195,11 @@ def print_summary(author, repo, week_label, commits, performance=""):
     if bugs:
         print(f"\n{RED}{BOLD}  🐛 BUG ({len(bugs)}){RESET}")
         for c in bugs:
+            print(f"     [{c['hash']}] {c['date']}  {c['message']}")
+
+    if updates:
+        print(f"\n{CYAN}{BOLD}  🔄 UPDATE ({len(updates)}){RESET}")
+        for c in updates:
             print(f"     [{c['hash']}] {c['date']}  {c['message']}")
 
     if other:
@@ -338,7 +346,8 @@ def main():
         "summary": {
             "total": len(commits),
             "task": len([c for c in commits if c["type"] == "TASK"]),
-            "bug":  len([c for c in commits if c["type"] == "BUG"]),
+            "bug": len([c for c in commits if c["type"] == "BUG"]),
+            "update": len([c for c in commits if c["type"] == "UPDATE"]),
             "other": len([c for c in commits if c["type"] == "OTHER"]),
         },
         "summary_note": performance,

@@ -19,7 +19,7 @@ Google Sheets.
 
 ```text
 git-team-tools/
-├── install.sh
+├── report-tools-installer.sh
 ├── hooks/
 │   └── commit-msg
 ├── scripts/
@@ -69,12 +69,12 @@ Recommended one-file install:
 
 ```bash
 cd /path/to/your-project
-curl -fsSL https://raw.githubusercontent.com/matech03/weekly-report-tools/main/install.sh -o install-weekly-report-tools.sh
-bash install-weekly-report-tools.sh
-rm install-weekly-report-tools.sh
+curl -fsSL https://raw.githubusercontent.com/matech03/weekly-report-tools/main/report-tools-installer.sh -o report-tools-installer.sh
+bash report-tools-installer.sh
+rm report-tools-installer.sh
 ```
 
-The downloaded `install.sh` is enough. If the full tool files are not available
+The downloaded `report-tools-installer.sh` is enough. If the full tool files are not available
 beside it, the installer clones this public repository into a temporary
 directory and continues the installation from there.
 
@@ -83,7 +83,7 @@ local copy:
 
 ```bash
 cd /path/to/your-project
-bash /path/to/git-team-tools/install.sh
+bash /path/to/git-team-tools/report-tools-installer.sh
 ```
 
 The installer will:
@@ -100,7 +100,7 @@ The installer will:
 Advanced: override the source repository used by the bootstrap installer:
 
 ```bash
-TOOLS_REPO_URL="https://github.com/matech03/weekly-report-tools.git" bash install-weekly-report-tools.sh
+TOOLS_REPO_URL="https://github.com/matech03/weekly-report-tools.git" bash report-tools-installer.sh
 ```
 
 ## Configuration
@@ -169,16 +169,17 @@ python .team-tools/suggest_commit.py
 Example output:
 
 ```text
-[1] TASK: Thêm màn hình đăng nhập bằng Google OAuth
-[2] TASK: Implement Google sign-in flow
-[3] TASK: Tích hợp Google OAuth vào luồng đăng nhập
+[1] TASK: Thêm script khởi tạo cấu hình dự án
+[2] TASK: Thêm lệnh kiểm tra cấu hình báo cáo
+[3] BUG: Sửa lỗi đọc file cấu hình khi thiếu biến môi trường
 ```
 
 Commit with one of the accepted prefixes:
 
 ```bash
-git commit -m "TASK: Thêm màn hình đăng nhập bằng Google OAuth"
-git commit -m "BUG: Sửa crash khi mở app lần đầu"
+git commit -m "TASK: Thêm script khởi tạo cấu hình dự án"
+git commit -m "BUG: Sửa lỗi đọc file cấu hình khi thiếu biến môi trường"
+git commit -m "UPDATE: Cập nhật định dạng báo cáo tuần"
 ```
 
 Invalid or vague messages are rejected by the hook:
@@ -194,24 +195,25 @@ Allowed prefixes:
 
 | Prefix | Use for |
 |--------|---------|
-| `TASK:` | New work, features, improvements, refactors, non-bug changes |
+| `TASK:` | New work or new features |
 | `BUG:` | Bug fixes, crashes, regressions, hotfixes |
+| `UPDATE:` | Updates, improvements, refactors, or non-bug changes to existing work |
 
 Rules enforced by the hook:
 
-- First line must start with `TASK:` or `BUG:`
+- First line must start with `TASK:`, `BUG:`, or `UPDATE:`
 - First line must be 72 characters or less
-- Description must not be too short
+- Description must have at least 3 words and 7 non-space characters
 - Vague messages such as `update code`, `fix bug`, `cleanup`, or `misc` are rejected
 - Merge, revert, fixup, and squash commits are allowed through
 
 Good examples:
 
 ```text
-TASK: Thêm màn hình chọn theme cá nhân hoá
-TASK: Tối ưu query tải danh sách bài viết
-BUG: Sửa crash khi mở app lần đầu trên Android 12
-BUG: Fix null pointer khi user chưa đăng nhập
+TASK: Thêm script khởi tạo cấu hình dự án
+UPDATE: Cập nhật định dạng báo cáo tuần
+BUG: Sửa lỗi đọc file cấu hình khi thiếu biến môi trường
+BUG: Fix lỗi gửi payload khi webhook trả về HTTP 403
 ```
 
 ## Weekly Report
@@ -301,9 +303,9 @@ The Apps Script writes three sheets.
 
 ### Summary
 
-| Week | Submitted At | Member | Repository | Total Commits | Tasks | Bugs | Other | Summary | Note |
-|------|--------------|--------|------------|---------------|-------|------|-------|---------|------|
-| 2025-W24 | 2025-06-13 17:30 | Nguyen Van A | mobile-app | 8 | 6 | 2 | 0 | - Hoàn thiện luồng đăng nhập<br>- Sửa crash khi mở app | Cần follow up QA |
+| Week | Submitted At | Member | Repository | Total Commits | Tasks | Bugs | Updates | Other | Summary | Note |
+|------|--------------|--------|------------|---------------|-------|------|---------|-------|---------|------|
+| 2025-W24 | 2025-06-13 17:30 | Nguyen Van A | weekly-report-tools | 8 | 4 | 2 | 2 | 0 | - Hoàn thiện script báo cáo tuần<br>- Sửa lỗi đọc cấu hình | Cần follow up QA |
 
 ### Weeks
 
@@ -315,7 +317,7 @@ The Apps Script writes three sheets.
 
 | Week | Member | Repository | Type | Commit Date | Hash | Commit Message |
 |------|--------|------------|------|-------------|------|----------------|
-| 09/06 - 15/06/2025 | Nguyen Van A | mobile-app | TASK | 2025-06-10 09:15 | a1b2c3d | TASK: Thêm màn hình login |
+| 09/06 - 15/06/2025 | Nguyen Van A | weekly-report-tools | TASK | 2025-06-10 09:15 | a1b2c3d | TASK: Thêm script khởi tạo cấu hình dự án |
 
 Type values are plain text: `TASK`, `BUG`, or `OTHER`.
 

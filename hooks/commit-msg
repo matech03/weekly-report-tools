@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
 Git hook: commit-msg
-Validate commit message theo format: TASK: ... | BUG: ...
+Validate commit message theo format: TASK: ... | BUG: ... | UPDATE: ...
 """
 
 import sys
 import re
 
-VALID_PREFIXES = ["TASK:", "BUG:"]
+VALID_PREFIXES = ["TASK:", "BUG:", "UPDATE:"]
 
 SKIP_PATTERNS = [
     r"^Merge ",
@@ -19,37 +19,38 @@ SKIP_PATTERNS = [
 # Các cụm từ bị coi là mô tả quá chung chung
 VAGUE_PATTERNS = [
     # Tiếng Anh
-    r"^(TASK|BUG):\s*(update|updates|updated)\s*$",
-    r"^(TASK|BUG):\s*(update|updates|updated)\s+(code|codes|file|files|source|stuff|things)\s*$",
-    r"^(TASK|BUG):\s*(fix|fixed|fixes)\b\s*$",
-    r"^(TASK|BUG):\s*fix\s+(bug|bugs|issue|issues)\s*$",
-    r"^(TASK|BUG):\s*(remove|removed|removes)\s+(some|a\s+few|old|unused)?\s*(code|codes|file|files|stuff|things)\b",
-    r"^(TASK|BUG):\s*(add|added|adds)\s+(some|a\s+few)?\s*(code|codes|file|files|stuff|things)\b",
-    r"^(TASK|BUG):\s*(minor\s+)?(change|changes|changed)\s*$",
-    r"^(TASK|BUG):\s*(clean\s*up|cleanup|cleaning)\s*(code|codes|file|files|stuff|things)?\s*$",
-    r"^(TASK|BUG):\s*(refactor|refactoring|refactored)\b\s*$",
-    r"^(TASK|BUG):\s*(misc|miscellaneous|wip|work\s+in\s+progress)\b",
-    r"^(TASK|BUG):\s*(temp|temporary|tmp)\b",
-    r"^(TASK|BUG):\s*(test|testing|tested)\b\s*$",
-    r"^(TASK|BUG):\s*(improve|improved|improvement|improvements)\b\s*$",
-    r"^(TASK|BUG):\s*(edit|edited|edits)\s*$",
-    r"^(TASK|BUG):\s*(edit|edited|edits)\s+(code|codes|file|files|stuff|things)\s*$",
-    r"^(TASK|BUG):\s*(modify|modified|modifies)\s*$",
-    r"^(TASK|BUG):\s*(modify|modified|modifies)\s+(code|codes|file|files|stuff|things)\s*$",
-    r"^(TASK|BUG):\s*(small|minor|tiny)\s+(fix|change|update|edit)\s*$",
+    r"^(TASK|BUG|UPDATE):\s*(update|updates|updated)\s*$",
+    r"^(TASK|BUG|UPDATE):\s*(update|updates|updated)\s+(code|codes|file|files|source|stuff|things)\s*$",
+    r"^(TASK|BUG|UPDATE):\s*(fix|fixed|fixes)\b\s*$",
+    r"^(TASK|BUG|UPDATE):\s*fix\s+(bug|bugs|issue|issues)\s*$",
+    r"^(TASK|BUG|UPDATE):\s*(remove|removed|removes)\s+(some|a\s+few|old|unused)?\s*(code|codes|file|files|stuff|things)\b",
+    r"^(TASK|BUG|UPDATE):\s*(add|added|adds)\s+(some|a\s+few)?\s*(code|codes|file|files|stuff|things)\b",
+    r"^(TASK|BUG|UPDATE):\s*(minor\s+)?(change|changes|changed)\s*$",
+    r"^(TASK|BUG|UPDATE):\s*(clean\s*up|cleanup|cleaning)\s*(code|codes|file|files|stuff|things)?\s*$",
+    r"^(TASK|BUG|UPDATE):\s*(refactor|refactoring|refactored)\b\s*$",
+    r"^(TASK|BUG|UPDATE):\s*(misc|miscellaneous|wip|work\s+in\s+progress)\b",
+    r"^(TASK|BUG|UPDATE):\s*(temp|temporary|tmp)\b",
+    r"^(TASK|BUG|UPDATE):\s*(test|testing|tested)\b\s*$",
+    r"^(TASK|BUG|UPDATE):\s*(improve|improved|improvement|improvements)\b\s*$",
+    r"^(TASK|BUG|UPDATE):\s*(edit|edited|edits)\s*$",
+    r"^(TASK|BUG|UPDATE):\s*(edit|edited|edits)\s+(code|codes|file|files|stuff|things)\s*$",
+    r"^(TASK|BUG|UPDATE):\s*(modify|modified|modifies)\s*$",
+    r"^(TASK|BUG|UPDATE):\s*(modify|modified|modifies)\s+(code|codes|file|files|stuff|things)\s*$",
+    r"^(TASK|BUG|UPDATE):\s*(small|minor|tiny)\s+(fix|change|update|edit)\s*$",
     # Tiếng Việt
-    r"^(TASK|BUG):\s*(cập\s*nhật|update)\s+(code|file|source|màn\s+hình|screen|giao\s*diện)?\s*$",
-    r"^(TASK|BUG):\s*sửa\s+(lỗi|bug)\s*$",
-    r"^(TASK|BUG):\s*(xóa|xoá|remove)\s+(một\s+số\s+)?(code|file|hàm|function)\s*$",
-    r"^(TASK|BUG):\s*(thêm|add)\s+(một\s+số\s+)?(code|file|thứ|stuff)\s*$",
-    r"^(TASK|BUG):\s*(chỉnh\s*sửa|chỉnh|sửa)\s+(nhỏ|nho|lặt\s*vặt|linh\s*tinh)?\s*$",
-    r"^(TASK|BUG):\s*(dọn|dọn\s*dẹp|cleanup)\s*(code)?\s*$",
-    r"^(TASK|BUG):\s*(tạm\s*thời|tạm|temp)\b",
-    r"^(TASK|BUG):\s*(linh\s*tinh|lặt\s*vặt|misc|vv\.?)\b",
+    r"^(TASK|BUG|UPDATE):\s*(cập\s*nhật|update)\s+(code|file|source|màn\s+hình|screen|giao\s*diện)?\s*$",
+    r"^(TASK|BUG|UPDATE):\s*sửa\s+(lỗi|bug)\s*$",
+    r"^(TASK|BUG|UPDATE):\s*(xóa|xoá|remove)\s+(một\s+số\s+)?(code|file|hàm|function)\s*$",
+    r"^(TASK|BUG|UPDATE):\s*(thêm|add)\s+(một\s+số\s+)?(code|file|thứ|stuff)\s*$",
+    r"^(TASK|BUG|UPDATE):\s*(chỉnh\s*sửa|chỉnh|sửa)\s+(nhỏ|nho|lặt\s*vặt|linh\s*tinh)?\s*$",
+    r"^(TASK|BUG|UPDATE):\s*(dọn|dọn\s*dẹp|cleanup)\s*(code)?\s*$",
+    r"^(TASK|BUG|UPDATE):\s*(tạm\s*thời|tạm|temp)\b",
+    r"^(TASK|BUG|UPDATE):\s*(linh\s*tinh|lặt\s*vặt|misc|vv\.?)\b",
 ]
 
-# Mô tả quá ngắn sau prefix (ít hơn 3 từ có nghĩa)
+# Mô tả quá ngắn sau prefix
 MIN_DESCRIPTION_WORDS = 3
+MIN_DESCRIPTION_CHARS = 7
 
 def is_vague(msg):
     lower = msg.lower().strip()
@@ -59,12 +60,13 @@ def is_vague(msg):
     return False
 
 def is_too_short(msg):
-    # Lấy phần sau "TASK: " hoặc "BUG: "
+    # Lấy phần sau "TASK: ", "BUG: " hoặc "UPDATE: "
     for prefix in VALID_PREFIXES:
         if msg.upper().startswith(prefix):
             description = msg[len(prefix):].strip()
             words = [w for w in description.split() if len(w) > 1]
-            return len(words) < MIN_DESCRIPTION_WORDS
+            chars = len(re.sub(r"\s+", "", description))
+            return len(words) < MIN_DESCRIPTION_WORDS or chars < MIN_DESCRIPTION_CHARS
     return False
 
 def print_box(lines):
@@ -98,16 +100,7 @@ def main():
     if not has_valid_prefix:
         print_box([
             "❌  COMMIT BỊ TỪ CHỐI — Sai format",
-            "",
-            "  FORMAT BẮT BUỘC:",
-            "    TASK: <mô tả cụ thể công việc / tính năng>",
-            "    BUG:  <mô tả cụ thể lỗi đã sửa>",
-            "",
-            "  VÍ DỤ HỢP LỆ:",
-            "    TASK: Thêm màn hình chọn theme cá nhân hoá",
-            "    BUG: Sửa crash khi mở app lần đầu trên Android 12",
-            "",
-            "  💡 Dùng gợi ý AI: python .team-tools/suggest_commit.py",
+            "  Prefix hợp lệ: TASK:, BUG:, UPDATE:",
         ])
         print(f"  Message của bạn: \"{first_line}\"")
         print()
@@ -117,22 +110,6 @@ def main():
     if is_vague(first_line):
         print_box([
             "❌  COMMIT BỊ TỪ CHỐI — Mô tả quá chung chung",
-            "",
-            "  Mô tả cần nói rõ: làm GÌ, ở đâu, tại sao.",
-            "",
-            "  ❌  KHÔNG được dùng:",
-            "    TASK: update code",
-            "    BUG:  fix bug",
-            "    TASK: remove some code",
-            "    TASK: chỉnh sửa nhỏ",
-            "    BUG:  sửa lỗi",
-            "",
-            "  ✅  NÊN viết:",
-            "    TASK: Cập nhật logic validate form đăng ký",
-            "    BUG:  Sửa crash khi submit form thiếu email",
-            "    TASK: Xoá các API endpoint không còn sử dụng",
-            "",
-            "  💡 Dùng gợi ý AI: python .team-tools/suggest_commit.py",
         ])
         print(f"  Message của bạn: \"{first_line}\"")
         print()
@@ -142,18 +119,7 @@ def main():
     if is_too_short(first_line):
         print_box([
             "❌  COMMIT BỊ TỪ CHỐI — Mô tả quá ngắn",
-            "",
-            "  Cần ít nhất 3 từ sau TASK:/BUG: để mô tả đủ ý.",
-            "",
-            "  ❌  Quá ngắn:",
-            "    TASK: login",
-            "    BUG:  null pointer",
-            "",
-            "  ✅  Đủ ý:",
-            "    TASK: Thêm chức năng đăng nhập Google",
-            "    BUG:  Sửa null pointer khi load profile",
-            "",
-            "  💡 Dùng gợi ý AI: python .team-tools/suggest_commit.py",
+            "  Cần ít nhất 3 từ và 7 ký tự không tính khoảng trắng sau prefix.",
         ])
         print(f"  Message của bạn: \"{first_line}\"")
         print()

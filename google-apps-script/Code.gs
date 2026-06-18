@@ -22,7 +22,7 @@ const SHEET_COMMITS  = "Commits";   // Sheet chi tiết từng commit
 const SHEET_WEEKS    = "Weeks";     // Sheet đối chiếu ISO week với ngày
 const SUMMARY_HEADERS = [
   "Week", "Submitted At", "Member", "Repository",
-  "Total Commits", "Tasks", "Bugs", "Other", "Summary", "Note"
+  "Total Commits", "Tasks", "Bugs", "Updates", "Other", "Summary", "Note"
 ];
 const COMMIT_HEADERS = [
   "Week", "Member", "Repository", "Type", "Commit Date", "Hash", "Commit Message"
@@ -35,6 +35,7 @@ const HEADER_TEXT = "#FFFFFF";
 const BORDER = "#E5E7EB";
 const TASK_BG = "#ECFDF5";
 const BUG_BG = "#FEF2F2";
+const UPDATE_BG = "#EFF6FF";
 const OTHER_BG = "#F9FAFB";
 const EVEN_ROW_BG = "#F9FAFB";
 const WHITE = "#FFFFFF";
@@ -139,10 +140,11 @@ function writeSummaryRow(data) {
   const values = sheet.getDataRange().getValues();
   for (let i = 1; i < values.length; i++) {
     if (values[i][0] === data.week && values[i][2] === data.author && values[i][3] === data.repo) {
-      const note = values[i][9] === undefined ? "" : values[i][9];
+      const note = values[i][10] !== undefined && values[i][10] !== "" ? values[i][10] :
+        (typeof values[i][8] === "string" ? (values[i][9] || "") : "");
       sheet.getRange(i + 1, 1, 1, SUMMARY_HEADERS.length).setValues([[
         data.week, data.submitted_at, data.author, data.repo,
-        data.summary.total, data.summary.task, data.summary.bug, data.summary.other,
+        data.summary.total, data.summary.task, data.summary.bug, data.summary.update || 0, data.summary.other,
         data.summary_note || data.performance || "", note
       ]]);
       return;
@@ -152,7 +154,7 @@ function writeSummaryRow(data) {
   // Thêm row mới
   sheet.appendRow([
     data.week, data.submitted_at, data.author, data.repo,
-    data.summary.total, data.summary.task, data.summary.bug, data.summary.other,
+    data.summary.total, data.summary.task, data.summary.bug, data.summary.update || 0, data.summary.other,
     data.summary_note || data.performance || "", ""
   ]);
   
@@ -174,8 +176,9 @@ function writeCommitRows(data) {
   
   // Ghi lại toàn bộ commits mới
   data.commits.forEach(commit => {
-    const typeLabel = commit.type === "TASK" ? "TASK" :
-                      commit.type === "BUG"  ? "BUG"  : "OTHER";
+    const typeLabel = commit.type === "TASK"   ? "TASK" :
+                      commit.type === "BUG"    ? "BUG" :
+                      commit.type === "UPDATE" ? "UPDATE" : "OTHER";
     sheet.appendRow([
       data.week, data.author, data.repo,
       typeLabel, commit.date, commit.hash, commit.message
@@ -201,9 +204,9 @@ function formatSummarySheet(sheet) {
   sheet.setColumnWidths(3, 1, 180);
   sheet.setColumnWidths(4, 1, 180);
   sheet.setColumnWidths(5, 1, 130);
-  sheet.setColumnWidths(6, 3, 90);
-  sheet.setColumnWidths(9, 1, 520);
-  sheet.setColumnWidths(10, 1, 360);
+  sheet.setColumnWidths(6, 4, 90);
+  sheet.setColumnWidths(10, 1, 520);
+  sheet.setColumnWidths(11, 1, 360);
   sheet.setRowHeight(1, 38);
 
   const lastRow = Math.max(sheet.getLastRow(), 1);
@@ -225,8 +228,8 @@ function formatSummarySheet(sheet) {
       sheet.getRange(row, 1, 1, lastCol).setBackground(bg);
       sheet.setRowHeight(row, 32);
     }
-    sheet.getRange(2, 5, lastRow - 1, 4).setHorizontalAlignment("center");
-    sheet.getRange(2, 9, lastRow - 1, 2).setHorizontalAlignment("left");
+    sheet.getRange(2, 5, lastRow - 1, 5).setHorizontalAlignment("center");
+    sheet.getRange(2, 10, lastRow - 1, 2).setHorizontalAlignment("left");
   }
 
   applyFilter(sheet, lastCol);
@@ -323,6 +326,8 @@ function applyCommitTypeColors(sheet, lastRow, lastCol) {
       sheet.getRange(row, 1, 1, lastCol).setBackground(BUG_BG);
     } else if (allRows[i][3] === "TASK") {
       sheet.getRange(row, 1, 1, lastCol).setBackground(TASK_BG);
+    } else if (allRows[i][3] === "UPDATE") {
+      sheet.getRange(row, 1, 1, lastCol).setBackground(UPDATE_BG);
     } else {
       const bg = row % 2 === 0 ? OTHER_BG : WHITE;
       sheet.getRange(row, 1, 1, lastCol).setBackground(bg);

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# install.sh — Cài đặt git-team-tools vào repo hiện tại
-# Usage: bash install.sh (chạy từ thư mục gốc của repo)
+# report-tools-installer.sh — Cài đặt git-team-tools vào repo hiện tại
+# Usage: bash report-tools-installer.sh (chạy từ thư mục gốc của repo)
 
 set -e
 
@@ -127,6 +127,7 @@ echo ""
 echo -e "  ${BOLD}Commit (tự động validate format):${RESET}"
 echo -e "    git commit -m \"TASK: Mô tả công việc\""
 echo -e "    git commit -m \"BUG: Sửa lỗi gì đó\""
+echo -e "    git commit -m \"UPDATE: Cập nhật phần hiện có\""
 echo ""
 echo -e "  ${BOLD}Tạo báo cáo tuần:${RESET}"
 echo -e "    python .team-tools/report.py             # gửi lên Google Sheets"
