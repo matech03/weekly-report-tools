@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 report.py — Tổng hợp commit cá nhân trong tuần → Google Sheets
-Usage: python report.py [--week YYYY-WW] [--author "Ten Nguoi"]
+Usage: python report.py [--week YYYY-WW|WW] [--author "Ten Nguoi"]
 
 Config: Đặt SHEETS_WEBHOOK_URL trong file .env cùng thư mục script
 hoặc environment variable
@@ -11,6 +11,7 @@ import subprocess
 import sys
 import os
 import json
+import re
 import urllib.request
 import urllib.error
 from datetime import datetime, timedelta
@@ -51,13 +52,22 @@ def load_config():
 def get_week_range(week_str=None):
     """Trả về (start_date, end_date) của tuần. Default = tuần hiện tại."""
     if week_str:
+        week_str = week_str.strip()
+        match = re.fullmatch(r"(?:(\d{4})-)?W(\d{1,2})", week_str, re.IGNORECASE)
+        if not match:
+            print(f"{RED}❌  Tuần không hợp lệ: {week_str}{RESET}")
+            print("   Format đúng: YYYY-Www hoặc Www, ví dụ 2025-W24 hoặc W24")
+            sys.exit(1)
+
+        year_part, week_part = match.groups()
+        year = int(year_part) if year_part else datetime.today().isocalendar()[0]
+        week = int(week_part)
         try:
-            year, week = map(int, week_str.split("-W"))
             # ISO week: Monday = 1, Sunday = 7.
             start = datetime.strptime(f"{year}-W{week:02d}-1", "%G-W%V-%u")
         except ValueError:
             print(f"{RED}❌  Tuần không hợp lệ: {week_str}{RESET}")
-            print("   Format đúng: YYYY-Www, ví dụ 2025-W24")
+            print("   Format đúng: YYYY-Www hoặc Www, ví dụ 2025-W24 hoặc W24")
             sys.exit(1)
     else:
         today = datetime.today()
@@ -169,10 +179,8 @@ def read_performance_override(args):
     return ""
 
 def print_summary(author, repo, week_label, commits, performance=""):
-    tasks   = [c for c in commits if c["type"] == "TASK"]
-    bugs    = [c for c in commits if c["type"] == "BUG"]
-    updates = [c for c in commits if c["type"] == "UPDATE"]
-    other   = [c for c in commits if c["type"] == "OTHER"]
+    tasks = [c for c in commits if c["type"] == "TASK"]
+    other = [c for c in commits if c["type"] != "TASK"]
 
     print(f"\n{BOLD}{CYAN}{'═'*58}{RESET}")
     print(f"{BOLD}  📋  WEEKLY REPORT{RESET}")
@@ -182,9 +190,7 @@ def print_summary(author, repo, week_label, commits, performance=""):
     print(f"  📅  Tuần   : {week_label}")
     print(f"  📊  Tổng   : {len(commits)} commits  "
           f"({GREEN}{len(tasks)} TASK{RESET} / "
-          f"{RED}{len(bugs)} BUG{RESET} / "
-          f"{CYAN}{len(updates)} UPDATE{RESET} / "
-          f"{YELLOW}{len(other)} other{RESET})")
+          f"{YELLOW}{len(other)} others{RESET})")
     print(f"{CYAN}{'─'*58}{RESET}")
 
     if tasks:
@@ -192,18 +198,8 @@ def print_summary(author, repo, week_label, commits, performance=""):
         for c in tasks:
             print(f"     [{c['hash']}] {c['date']}  {c['message']}")
 
-    if bugs:
-        print(f"\n{RED}{BOLD}  🐛 BUG ({len(bugs)}){RESET}")
-        for c in bugs:
-            print(f"     [{c['hash']}] {c['date']}  {c['message']}")
-
-    if updates:
-        print(f"\n{CYAN}{BOLD}  🔄 UPDATE ({len(updates)}){RESET}")
-        for c in updates:
-            print(f"     [{c['hash']}] {c['date']}  {c['message']}")
-
     if other:
-        print(f"\n{YELLOW}  ⚠️  OTHER (không đúng format) ({len(other)}){RESET}")
+        print(f"\n{YELLOW}  ⚠️  OTHERS (BUG/UPDATE/khác) ({len(other)}){RESET}")
         for c in other:
             print(f"     [{c['hash']}] {c['date']}  {c['message']}")
 
@@ -273,7 +269,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="Tổng hợp commit tuần → Google Sheets"
     )
-    parser.add_argument("--week", help="Tuần cụ thể: YYYY-WWW (vd: 2025-W24)")
+    parser.add_argument("--week", help="Tuần cụ thể: YYYY-Www hoặc Www (vd: 2025-W24 hoặc W24)")
     parser.add_argument("--author", help="Override tên tác giả")
     parser.add_argument("--dry-run", action="store_true",
                         help="Chỉ in ra màn hình, không gửi lên Sheets")
@@ -305,8 +301,8 @@ def main():
     commits = fetch_commits(author, start, end)
 
     if not commits:
-        print(f"\n{YELLOW}⚠️  Không tìm thấy commit nào trong tuần này.{RESET}")
-        print("   Kiểm tra lại: git log --author='<tên>' --since='7 days ago'")
+        print(f"\n{YELLOW}⚠️  Không tìm thấy commit nào trong tuần đã chọn.{RESET}")
+        print("   Kiểm tra lại: git log --author='<tên>' --since='<week start>' --until='<week end>'")
         sys.exit(0)
 
     performance = read_performance_override(args)
@@ -346,9 +342,7 @@ def main():
         "summary": {
             "total": len(commits),
             "task": len([c for c in commits if c["type"] == "TASK"]),
-            "bug": len([c for c in commits if c["type"] == "BUG"]),
-            "update": len([c for c in commits if c["type"] == "UPDATE"]),
-            "other": len([c for c in commits if c["type"] == "OTHER"]),
+            "other": len([c for c in commits if c["type"] != "TASK"]),
         },
         "summary_note": performance,
         "performance": performance,

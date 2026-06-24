@@ -101,11 +101,13 @@ Treat these as requests to use this skill:
    python .team-tools/report.py --dry-run --performance-file /path/to/summary.txt
    ```
 
-6. If the user specifies a week, pass it through as ISO week:
+6. If the user specifies a week, pass it through as ISO week (`YYYY-Www`) or week number (`Www`). Week numbers without a year use the current ISO year:
 
    ```bash
    python .team-tools/report.py --week YYYY-Www --performance-file /path/to/summary.txt
    python .team-tools/report.py --week YYYY-Www --dry-run --performance-file /path/to/summary.txt
+   python .team-tools/report.py --week Www --performance-file /path/to/summary.txt
+   python .team-tools/report.py --week Www --dry-run --performance-file /path/to/summary.txt
    ```
 
 7. If the user specifies an author, pass it through. Treat phrases such as

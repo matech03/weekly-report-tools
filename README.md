@@ -1,111 +1,126 @@
-# git-team-tools
+# weekly-report-tools
 
-Lightweight commit and weekly reporting tools for a small development team.
+Bộ tool nhẹ để chuẩn hóa commit message và gửi báo cáo commit hằng tuần lên Google Sheets.
 
-The toolkit helps the team keep commit messages consistent, generate commit
-message suggestions from staged changes, and submit weekly commit summaries to
-Google Sheets.
-
-## Tools
-
-| Tool | Purpose |
-|------|---------|
-| `scripts/suggest_commit.py` | Uses Anthropic Claude to suggest `TASK:` or `BUG:` commit messages from staged git diff. |
-| `hooks/commit-msg` | Git hook that rejects vague or invalid commit messages before they are committed. |
-| `scripts/report.py` | Collects weekly commits by author and sends a structured report to Google Sheets. |
-| `google-apps-script/Code.gs` | Google Apps Script webhook that receives report data and writes it into Sheets. |
-
-## Repository Structure
+## Cấu trúc project
 
 ```text
-git-team-tools/
-├── report-tools-installer.sh
+weekly-report-tools/
+├── report-tools-installer.sh        # Script cài tool vào project đích
 ├── hooks/
-│   └── commit-msg
+│   └── commit-msg                   # Git hook validate commit message
 ├── scripts/
-│   ├── suggest_commit.py
-│   └── report.py
-├── codex-skills/
-│   └── weekly-report/
-│       └── SKILL.md
-├── claude-skills/
-│   └── weekly-report/
-│       └── SKILL.md
+│   └── report.py                    # Script tổng hợp commit và gửi report
+├── google-apps-script/
+│   └── Code.gs                      # Webhook ghi dữ liệu vào Google Sheets
 ├── claude-commands/
-│   └── report.md
-└── google-apps-script/
-    └── Code.gs
+│   └── report.md                    # Slash command /report cho Claude Code
+├── claude-skills/
+│   └── weekly-report/SKILL.md       # Skill report cho Claude Code
+└── codex-skills/
+    └── weekly-report/SKILL.md       # Skill report cho Codex
 ```
 
-## Requirements
+## Tính năng
+
+### Commit rule
+
+Hook `commit-msg` chỉ cho phép commit message có prefix:
+
+| Prefix | Ý nghĩa |
+|--------|---------|
+| `TASK:` | Tính năng mới, task mới, công việc chính |
+| `BUG:` | Sửa lỗi, hotfix, regression |
+| `UPDATE:` | Cập nhật, cải tiến, refactor, thay đổi không phải bug |
+
+Rule đang enforce:
+
+- Dòng đầu phải bắt đầu bằng `TASK:`, `BUG:`, hoặc `UPDATE:`
+- Dòng đầu tối đa **100 ký tự**
+- Mô tả sau prefix cần ít nhất **3 từ** và **7 ký tự không tính khoảng trắng**
+- Reject message quá chung chung như `update code`, `fix bug`, `cleanup`, `misc`
+- Bỏ qua validate cho `Merge`, `Revert`, `fixup!`, `squash!`
+
+Ví dụ hợp lệ:
+
+```text
+TASK: Thêm bộ lọc báo cáo theo tuần
+BUG: Sửa lỗi gửi payload khi webhook lỗi
+UPDATE: Cập nhật định dạng báo cáo tuần
+```
+
+### Weekly report
+
+`report.py` tổng hợp commit theo author và tuần, sau đó gửi lên Google Sheets.
+
+Report gồm 3 sheet:
+
+- `Summary`: tổng hợp theo tuần/member/repository
+- `Weeks`: mapping ISO week với ngày bắt đầu/kết thúc
+- `Commits`: chi tiết từng commit
+
+Cột count trong `Summary`:
+
+| Cột | Cách tính |
+|-----|----------|
+| `Total Commits` | Tổng số commit |
+| `Tasks` | Số commit prefix `TASK:` |
+| `Others` | Số commit `BUG:`, `UPDATE:`, hoặc commit khác format |
+
+Nếu Google Sheet đang có layout cũ với cột `Bugs` và `Updates`, Apps Script sẽ tự migrate:
+
+```text
+Others = Bugs + Updates + Other cũ
+```
+
+Cột `Note` thủ công trong Google Sheets sẽ được giữ lại khi submit lại cùng tuần/member/repository.
+
+### Claude/Codex report skill
+
+Sau khi cài đặt, có thể gọi report bằng:
+
+```text
+report
+preview report
+/report
+```
+
+Mặc định `report` sẽ gửi lên Google Sheets. Chỉ chạy preview khi prompt có ý rõ như `preview`, `xem trước`, `dry-run`.
+
+## Cài đặt
+
+### Yêu cầu
 
 - Git 2.x
 - Python 3.7+
-- Anthropic Python SDK
-- `ANTHROPIC_API_KEY` environment variable
-- A deployed Google Apps Script Web App for report submission
+- Google Apps Script Web App URL kết thúc bằng `/exec`
 
-Install the Python dependency:
+### Cài vào project đích
 
-```bash
-pip install anthropic
-```
-
-Configure Anthropic:
+Chạy trong thư mục root của project cần dùng report:
 
 ```bash
-export ANTHROPIC_API_KEY="sk-ant-..."
-```
-
-Optional model override:
-
-```bash
-export ANTHROPIC_MODEL="claude-sonnet-4-6"
-```
-
-## Install Into a Project Repository
-
-Recommended one-file install:
-
-```bash
-cd /path/to/your-project
 curl -fsSL https://raw.githubusercontent.com/matech03/weekly-report-tools/main/report-tools-installer.sh -o report-tools-installer.sh
 bash report-tools-installer.sh
 rm report-tools-installer.sh
 ```
 
-The downloaded `report-tools-installer.sh` is enough. If the full tool files are not available
-beside it, the installer clones this public repository into a temporary
-directory and continues the installation from there.
-
-If you already cloned this repository locally, you can also install from that
-local copy:
+Hoặc nếu đã clone repo này local:
 
 ```bash
-cd /path/to/your-project
-bash /path/to/git-team-tools/report-tools-installer.sh
+bash /path/to/weekly-report-tools/report-tools-installer.sh
 ```
 
-The installer will:
+Installer sẽ:
 
-- Copy `suggest_commit.py` and `report.py` into `.team-tools/`
-- Copy the local Codex weekly report skill into `.codex/skills/weekly-report/`
-- Copy the local Claude weekly report skill into `.claude/skills/weekly-report/`
-- Copy the local Claude slash command into `.claude/commands/report.md`
-- Install `hooks/commit-msg` into `.git/hooks/commit-msg`
-- Back up an existing `commit-msg` hook before replacing it
-- Create `.team-tools/.env` if it does not exist
-- Add `.team-tools/` to the project `.gitignore`
+- Copy `scripts/report.py` vào `.team-tools/report.py`
+- Cài `hooks/commit-msg` vào `.git/hooks/commit-msg`
+- Copy Claude/Codex weekly report skill vào project
+- Tạo `.team-tools/.env` nếu chưa có
+- Thêm `.team-tools/` vào `.gitignore`
+- Backup hook cũ nếu `.git/hooks/commit-msg` đã tồn tại
 
-Advanced: override the source repository used by the bootstrap installer:
-
-```bash
-TOOLS_REPO_URL="https://github.com/matech03/weekly-report-tools.git" bash report-tools-installer.sh
-```
-
-## Configuration
-
-The installer creates `.team-tools/.env` in each project repository.
+### Cấu hình `.team-tools/.env`
 
 ```env
 # Optional: override git config user.name
@@ -114,15 +129,11 @@ The installer creates `.team-tools/.env` in each project repository.
 # Google Apps Script Web App endpoint
 SHEETS_WEBHOOK_URL="https://script.google.com/macros/s/.../exec"
 
-# Optional: must match REPORT_SECRET in google-apps-script/Code.gs
+# Optional: nếu Code.gs có REPORT_SECRET
 # REPORT_SECRET="change-me"
 ```
 
-Important: `SHEETS_WEBHOOK_URL` must be a Web App URL ending with `/exec`.
-Apps Script Library URLs such as `/macros/library/d/...` are not valid webhook
-endpoints.
-
-Environment variables override values from `.team-tools/.env`:
+Environment variables có thể override `.env`:
 
 ```bash
 export SHEETS_WEBHOOK_URL="https://script.google.com/macros/s/.../exec"
@@ -130,256 +141,131 @@ export REPORT_AUTHOR="Nguyen Van A"
 export REPORT_SECRET="change-me"
 ```
 
-## Google Sheets Setup
+### Cài Google Apps Script
 
-The included Apps Script is already configured with the team spreadsheet ID in
-`google-apps-script/Code.gs`.
-
-To deploy or update the webhook:
-
-1. Open the target Google Sheet.
-2. Go to `Extensions` > `Apps Script`.
-3. Paste or update the content from `google-apps-script/Code.gs`.
-4. Save the script.
-5. Go to `Deploy` > `New deployment` or `Manage deployments`.
-6. Select type `Web app`.
-7. Use:
+1. Mở Google Sheet nhận report.
+2. Vào `Extensions` > `Apps Script`.
+3. Paste nội dung `google-apps-script/Code.gs`.
+4. Kiểm tra `SPREADSHEET_ID` trong `Code.gs`.
+5. Deploy dạng `Web app`:
    - `Execute as`: `Me`
    - `Who has access`: `Anyone`
-8. Deploy and copy the Web App URL.
-9. Put that URL in `.team-tools/.env` as `SHEETS_WEBHOOK_URL`.
+6. Copy Web App URL kết thúc bằng `/exec` vào `.team-tools/.env`.
 
-If the domain policy blocks public Apps Script web apps, the local report script
-will receive HTTP 401 or 403 even when the deployment UI appears correct.
+## Cách sử dụng
 
-## Daily Workflow
-
-Stage the files you want to commit:
+### Commit
 
 ```bash
-git add src/LoginScreen.kt
-```
-
-Generate commit message suggestions:
-
-```bash
-python .team-tools/suggest_commit.py
-```
-
-Example output:
-
-```text
-[1] TASK: Thêm script khởi tạo cấu hình dự án
-[2] TASK: Thêm lệnh kiểm tra cấu hình báo cáo
-[3] BUG: Sửa lỗi đọc file cấu hình khi thiếu biến môi trường
-```
-
-Commit with one of the accepted prefixes:
-
-```bash
-git commit -m "TASK: Thêm script khởi tạo cấu hình dự án"
-git commit -m "BUG: Sửa lỗi đọc file cấu hình khi thiếu biến môi trường"
+git commit -m "TASK: Thêm bộ lọc báo cáo theo tuần"
+git commit -m "BUG: Sửa lỗi gửi payload khi webhook lỗi"
 git commit -m "UPDATE: Cập nhật định dạng báo cáo tuần"
 ```
 
-Invalid or vague messages are rejected by the hook:
+Các message sau sẽ bị reject:
 
 ```bash
 git commit -m "update code"
 git commit -m "BUG: fix bug"
+git commit -m "TASK: sửa lỗi"
 ```
 
-## Commit Message Format
-
-Allowed prefixes:
-
-| Prefix | Use for |
-|--------|---------|
-| `TASK:` | New work or new features |
-| `BUG:` | Bug fixes, crashes, regressions, hotfixes |
-| `UPDATE:` | Updates, improvements, refactors, or non-bug changes to existing work |
-
-Rules enforced by the hook:
-
-- First line must start with `TASK:`, `BUG:`, or `UPDATE:`
-- First line must be 72 characters or less
-- Description must have at least 3 words and 7 non-space characters
-- Vague messages such as `update code`, `fix bug`, `cleanup`, or `misc` are rejected
-- Merge, revert, fixup, and squash commits are allowed through
-
-Good examples:
-
-```text
-TASK: Thêm script khởi tạo cấu hình dự án
-UPDATE: Cập nhật định dạng báo cáo tuần
-BUG: Sửa lỗi đọc file cấu hình khi thiếu biến môi trường
-BUG: Fix lỗi gửi payload khi webhook trả về HTTP 403
-```
-
-## Weekly Report
-
-Preview report data without sending it:
+### Preview report
 
 ```bash
 python .team-tools/report.py --dry-run
 ```
 
-Submit the current week to Google Sheets:
+### Gửi report tuần hiện tại
 
 ```bash
 python .team-tools/report.py
 ```
 
-The report payload supports a `Summary` notes column. When Codex or
-Claude runs the local skill, the current agent should inspect the weekly commits
-and code changes, summarize 2-5 short bullet notes about what the developer
-worked on, and pass them to the script. Each bullet should be easy to scan and
-under 90 characters:
+### Gửi report cho tuần cụ thể
+
+Dùng ISO week đầy đủ:
+
+```bash
+python .team-tools/report.py --week 2026-W24
+```
+
+Hoặc chỉ truyền số tuần, tool sẽ dùng ISO year hiện tại:
+
+```bash
+python .team-tools/report.py --week W24
+```
+
+### Gửi report cho author cụ thể
+
+```bash
+python .team-tools/report.py --author "Nguyen Van A"
+```
+
+Có thể kết hợp nhiều option:
+
+```bash
+python .team-tools/report.py --week W24 --author "Nguyen Van A" --dry-run
+```
+
+### Thêm summary notes
 
 ```bash
 python .team-tools/report.py --performance-file /tmp/performance.txt
 ```
 
-If no performance notes are passed, the `Summary` column is left blank and
-the report still submits. Summary generation is handled by the current
-Claude/Codex agent before it calls `report.py`.
+File summary nên gồm 2-5 bullet ngắn:
 
-If you use Codex in a project where the installer has been run, you can also
-trigger the local project skill with:
+```text
+- Hoàn thiện rule commit cho team
+- Cập nhật weekly report gửi Google Sheets
+- Bổ sung migrate dữ liệu Bugs/Updates sang Others
+```
+
+Nếu không truyền summary notes, cột `Summary` sẽ để trống nhưng report vẫn gửi bình thường.
+
+### Dùng bằng Claude/Codex skill
+
+Submit report:
 
 ```text
 report
+báo cáo tuần
+/report
 ```
 
-This submits the current week to Google Sheets by default. To preview without
-sending, ask explicitly:
+Preview report:
 
 ```text
 preview report
 xem trước report
 ```
 
-If you use Claude Code in a project where the installer has been run, you can
-use the local skill with the same prompt, or use the project slash command:
+Report tuần cụ thể:
 
 ```text
-/report
+report W24
+báo cáo tuần W24 của dev3
 ```
 
-Claude follows the same rule: `report` submits, while `preview report` or
-`xem trước report` runs a dry run.
+### Troubleshooting nhanh
 
-Submit a specific ISO week:
-
-```bash
-python .team-tools/report.py --week 2025-W24
-```
-
-Override author:
-
-```bash
-python .team-tools/report.py --author "Nguyen Van A"
-```
-
-With the local Codex/Claude skill, prompts such as `báo cáo tuần của dev3`
-should be treated as:
-
-```bash
-python .team-tools/report.py --author "dev3"
-```
-
-If no commits are found for that author/week, the script stops without
-submitting anything.
-
-The report script reads commits from all refs with:
-
-```text
-git log --author=<author> --since=<week start> --until=<week end> --no-merges --all
-```
-
-## Google Sheets Output
-
-The Apps Script writes three sheets.
-
-### Summary
-
-| Week | Submitted At | Member | Repository | Total Commits | Tasks | Bugs | Updates | Other | Summary | Note |
-|------|--------------|--------|------------|---------------|-------|------|---------|-------|---------|------|
-| 2025-W24 | 2025-06-13 17:30 | Nguyen Van A | weekly-report-tools | 8 | 4 | 2 | 2 | 0 | - Hoàn thiện script báo cáo tuần<br>- Sửa lỗi đọc cấu hình | Cần follow up QA |
-
-### Weeks
-
-| Week | Start Date | End Date | Date Range |
-|------|------------|----------|------------|
-| 2025-W24 | 2025-06-09 | 2025-06-15 | 09/06 – 15/06/2025 |
-
-### Commits
-
-| Week | Member | Repository | Type | Commit Date | Hash | Commit Message |
-|------|--------|------------|------|-------------|------|----------------|
-| 09/06 - 15/06/2025 | Nguyen Van A | weekly-report-tools | TASK | 2025-06-10 09:15 | a1b2c3d | TASK: Thêm script khởi tạo cấu hình dự án |
-
-Type values are plain text: `TASK`, `BUG`, or `OTHER`.
-
-The `Summary` column is updated by each report submission. The `Note` column is
-for manual edits directly in Google Sheets; when the same week/member/repository
-is submitted again, the existing `Note` value is preserved.
-
-The Apps Script owns the report layout. Each submission reapplies header style,
-column widths, row heights, wrapping, filters, borders, and lightweight row
-colors. Manual formatting inside the report tables may be overwritten on the
-next submission.
-
-## Troubleshooting
-
-### No staged files
-
-Run `git add <files>` before `suggest_commit.py`.
-
-### Missing Anthropic SDK
-
-Install the dependency:
-
-```bash
-pip install anthropic
-```
-
-### Missing Anthropic API key
-
-Set `ANTHROPIC_API_KEY` in your shell environment.
-
-### Report cannot find commits
-
-Check the author name:
+Kiểm tra author hiện tại:
 
 ```bash
 git config user.name
+```
+
+Chạy report với author chính xác:
+
+```bash
 python .team-tools/report.py --author "Exact Git Author Name" --dry-run
 ```
 
-### Apps Script returns HTTP 401 or 403
-
-Confirm that the Web App deployment uses:
+Nếu gặp HTTP 401/403 từ Apps Script, kiểm tra lại deployment:
 
 - `Execute as`: `Me`
 - `Who has access`: `Anyone`
+- URL trong `.env` phải là Web App URL kết thúc bằng `/exec`
 
-Also confirm that `.team-tools/.env` uses a Web App URL ending with `/exec`, not
-an Apps Script Library URL.
-
-### Apps Script returns `Unauthorized`
-
-If `REPORT_SECRET` is set in `Code.gs`, the same value must be set in
-`.team-tools/.env` or in the `REPORT_SECRET` environment variable.
-
-## Preparing a GitHub Remote
-
-After initializing this repository, add your GitHub remote and push:
-
-```bash
-git remote add origin git@github.com:<org-or-user>/git-team-tools.git
-git add .
-git commit -m "TASK: Add git team reporting tools"
-git branch -M main
-git push -u origin main
-```
+Nếu gặp `Unauthorized`, đảm bảo `REPORT_SECRET` trong `.env` giống với `REPORT_SECRET` trong `Code.gs`.

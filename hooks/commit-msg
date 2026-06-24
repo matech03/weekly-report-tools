@@ -51,6 +51,7 @@ VAGUE_PATTERNS = [
 # Mô tả quá ngắn sau prefix
 MIN_DESCRIPTION_WORDS = 3
 MIN_DESCRIPTION_CHARS = 7
+MAX_FIRST_LINE_CHARS = 100
 
 def is_vague(msg):
     lower = msg.lower().strip()
@@ -126,9 +127,9 @@ def main():
         sys.exit(1)
 
     # ── Check 4: Dòng đầu quá dài ───────────────────────────
-    if len(first_line) > 72:
+    if len(first_line) > MAX_FIRST_LINE_CHARS:
         print()
-        print(f"⚠️  Commit message quá dài (tối đa 72 ký tự, hiện tại: {len(first_line)}).")
+        print(f"⚠️  Commit message quá dài (tối đa {MAX_FIRST_LINE_CHARS} ký tự, hiện tại: {len(first_line)}).")
         print(f"   \"{first_line}\"")
         print()
         sys.exit(1)

@@ -39,11 +39,12 @@ avoid paragraphs or long explanations.
   python .team-tools/report.py --dry-run --performance-file /path/to/summary.txt
   ```
 
-- If the user provides an ISO week, include it and keep the same submit/preview
-  decision:
+- If the user provides an ISO week (`YYYY-Www`) or a week number (`Www`), include it and keep the same submit/preview
+  decision. Week numbers without a year use the current ISO year:
 
   ```bash
   python .team-tools/report.py --week YYYY-Www --performance-file /path/to/summary.txt
+  python .team-tools/report.py --week Www --performance-file /path/to/summary.txt
   ```
 
 - If the user provides an author, including phrases such as `báo cáo tuần của

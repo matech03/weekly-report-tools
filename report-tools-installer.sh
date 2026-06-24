@@ -40,8 +40,7 @@ if [ ! -d "$REPO_DIR/.git" ]; then
     exit 1
 fi
 
-if [ ! -f "$TOOLS_DIR/scripts/suggest_commit.py" ] || \
-   [ ! -f "$TOOLS_DIR/hooks/commit-msg" ] || \
+if [ ! -f "$TOOLS_DIR/hooks/commit-msg" ] || \
    [ ! -f "$TOOLS_DIR/codex-skills/weekly-report/SKILL.md" ] || \
    [ ! -f "$TOOLS_DIR/claude-skills/weekly-report/SKILL.md" ] || \
    [ ! -f "$TOOLS_DIR/claude-commands/report.md" ]; then
@@ -64,7 +63,6 @@ fi
 # Copy scripts vào repo
 echo -e "📁  Tạo thư mục .team-tools/..."
 mkdir -p "$SCRIPTS_TARGET"
-cp "$TOOLS_DIR/scripts/suggest_commit.py" "$SCRIPTS_TARGET/"
 cp "$TOOLS_DIR/scripts/report.py" "$SCRIPTS_TARGET/"
 
 # Cài Codex skill local trong project
@@ -119,10 +117,6 @@ echo ""
 echo -e "${GREEN}${BOLD}✅  Cài đặt hoàn tất!${RESET}"
 echo ""
 echo -e "${CYAN}CÁCH SỬ DỤNG:${RESET}"
-echo ""
-echo -e "  ${BOLD}Gợi ý commit message:${RESET}"
-echo -e "    git add <files>"
-echo -e "    python .team-tools/suggest_commit.py"
 echo ""
 echo -e "  ${BOLD}Commit (tự động validate format):${RESET}"
 echo -e "    git commit -m \"TASK: Mô tả công việc\""

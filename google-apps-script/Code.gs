@@ -22,7 +22,7 @@ const SHEET_COMMITS  = "Commits";   // Sheet chi tiết từng commit
 const SHEET_WEEKS    = "Weeks";     // Sheet đối chiếu ISO week với ngày
 const SUMMARY_HEADERS = [
   "Week", "Submitted At", "Member", "Repository",
-  "Total Commits", "Tasks", "Bugs", "Updates", "Other", "Summary", "Note"
+  "Total Commits", "Tasks", "Others", "Summary", "Note"
 ];
 const COMMIT_HEADERS = [
   "Week", "Member", "Repository", "Type", "Commit Date", "Hash", "Commit Message"
@@ -84,6 +84,7 @@ function ensureSheetsExist() {
     s.setFrozenRows(1);
   }
   const summary = ss.getSheetByName(SHEET_SUMMARY);
+  migrateSummarySheet(summary);
   ensureColumnCount(summary, SUMMARY_HEADERS.length);
   summary.getRange(1, 1, 1, SUMMARY_HEADERS.length).setValues([SUMMARY_HEADERS]);
 
@@ -102,6 +103,45 @@ function ensureSheetsExist() {
   const weeks = ss.getSheetByName(SHEET_WEEKS);
   ensureColumnCount(weeks, WEEK_HEADERS.length);
   weeks.getRange(1, 1, 1, WEEK_HEADERS.length).setValues([WEEK_HEADERS]);
+}
+
+function migrateSummarySheet(sheet) {
+  const values = sheet.getDataRange().getValues();
+  if (!values.length) return;
+
+  const headers = values[0];
+  const hasOldCountColumns = headers[6] === "Bugs" && headers[7] === "Updates";
+  if (!hasOldCountColumns && sheet.getMaxColumns() <= SUMMARY_HEADERS.length) return;
+
+  const rows = values.map((row, index) => {
+    if (index === 0) return SUMMARY_HEADERS;
+
+    if (hasOldCountColumns) {
+      const bugs = Number(row[6]) || 0;
+      const updates = Number(row[7]) || 0;
+      const oldOther = Number(row[8]) || 0;
+      return [
+        row[0] || "", row[1] || "", row[2] || "", row[3] || "",
+        row[4] || 0, row[5] || 0, bugs + updates + oldOther,
+        row[9] || "", row[10] || ""
+      ];
+    }
+
+    return [
+      row[0] || "", row[1] || "", row[2] || "", row[3] || "",
+      row[4] || 0, row[5] || 0, row[6] || 0,
+      row[7] || "", row[8] || ""
+    ];
+  });
+
+  sheet.clearContents();
+  ensureColumnCount(sheet, SUMMARY_HEADERS.length);
+  sheet.getRange(1, 1, rows.length, SUMMARY_HEADERS.length).setValues(rows);
+
+  const extraColumns = sheet.getMaxColumns() - SUMMARY_HEADERS.length;
+  if (extraColumns > 0) {
+    sheet.deleteColumns(SUMMARY_HEADERS.length + 1, extraColumns);
+  }
 }
 
 function ensureColumnCount(sheet, count) {
@@ -135,16 +175,17 @@ function writeWeekRow(data) {
 function writeSummaryRow(data) {
   const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sheet = ss.getSheetByName(SHEET_SUMMARY);
-  
+  const otherCount = Number(data.summary.other || 0) +
+    Number(data.summary.bug || 0) + Number(data.summary.update || 0);
+
   // Kiểm tra nếu đã có row của tuần+author này thì update
   const values = sheet.getDataRange().getValues();
   for (let i = 1; i < values.length; i++) {
     if (values[i][0] === data.week && values[i][2] === data.author && values[i][3] === data.repo) {
-      const note = values[i][10] !== undefined && values[i][10] !== "" ? values[i][10] :
-        (typeof values[i][8] === "string" ? (values[i][9] || "") : "");
+      const note = values[i][8] || "";
       sheet.getRange(i + 1, 1, 1, SUMMARY_HEADERS.length).setValues([[
         data.week, data.submitted_at, data.author, data.repo,
-        data.summary.total, data.summary.task, data.summary.bug, data.summary.update || 0, data.summary.other,
+        data.summary.total, data.summary.task, otherCount,
         data.summary_note || data.performance || "", note
       ]]);
       return;
@@ -154,10 +195,10 @@ function writeSummaryRow(data) {
   // Thêm row mới
   sheet.appendRow([
     data.week, data.submitted_at, data.author, data.repo,
-    data.summary.total, data.summary.task, data.summary.bug, data.summary.update || 0, data.summary.other,
+    data.summary.total, data.summary.task, otherCount,
     data.summary_note || data.performance || "", ""
   ]);
-  
+
 }
 
 function writeCommitRows(data) {
@@ -204,9 +245,9 @@ function formatSummarySheet(sheet) {
   sheet.setColumnWidths(3, 1, 180);
   sheet.setColumnWidths(4, 1, 180);
   sheet.setColumnWidths(5, 1, 130);
-  sheet.setColumnWidths(6, 4, 90);
-  sheet.setColumnWidths(10, 1, 520);
-  sheet.setColumnWidths(11, 1, 360);
+  sheet.setColumnWidths(6, 2, 90);
+  sheet.setColumnWidths(8, 1, 520);
+  sheet.setColumnWidths(9, 1, 360);
   sheet.setRowHeight(1, 38);
 
   const lastRow = Math.max(sheet.getLastRow(), 1);
@@ -228,8 +269,8 @@ function formatSummarySheet(sheet) {
       sheet.getRange(row, 1, 1, lastCol).setBackground(bg);
       sheet.setRowHeight(row, 32);
     }
-    sheet.getRange(2, 5, lastRow - 1, 5).setHorizontalAlignment("center");
-    sheet.getRange(2, 10, lastRow - 1, 2).setHorizontalAlignment("left");
+    sheet.getRange(2, 5, lastRow - 1, 3).setHorizontalAlignment("center");
+    sheet.getRange(2, 8, lastRow - 1, 2).setHorizontalAlignment("left");
   }
 
   applyFilter(sheet, lastCol);
