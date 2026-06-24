@@ -95,20 +95,42 @@ Mặc định `report` sẽ gửi lên Google Sheets. Chỉ chạy preview khi p
 - Python 3.7+
 - Google Apps Script Web App URL kết thúc bằng `/exec`
 
-### Cài vào project đích
+### Dành cho leader
 
-Chạy trong thư mục root của project cần dùng report:
+Leader chuẩn bị Google Sheet và webhook dùng chung cho team:
+
+1. Mở Google Sheet nhận report.
+2. Vào `Extensions` > `Apps Script`.
+3. Paste nội dung `google-apps-script/Code.gs`.
+4. Kiểm tra `SPREADSHEET_ID` trong `Code.gs`.
+5. Deploy dạng `Web app`:
+   - `Execute as`: `Me`
+   - `Who has access`: `Anyone`
+6. Copy Web App URL kết thúc bằng `/exec`.
+7. Gửi Web App URL cho các thành viên để cấu hình `SHEETS_WEBHOOK_URL`.
+
+Nếu cần bảo vệ webhook, leader đặt `REPORT_SECRET` trong `Code.gs` và gửi cùng giá trị đó cho thành viên.
+
+### Dành cho thành viên
+
+Chạy trong thư mục root của project cần dùng report.
+
+Bước 1: download installer về project:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/matech03/weekly-report-tools/main/report-tools-installer.sh -o report-tools-installer.sh
-bash report-tools-installer.sh
-rm report-tools-installer.sh
 ```
 
-Hoặc nếu đã clone repo này local:
+Bước 2: chạy installer:
 
 ```bash
-bash /path/to/weekly-report-tools/report-tools-installer.sh
+bash report-tools-installer.sh
+```
+
+Bước 3: xoá file installer sau khi cài xong:
+
+```bash
+rm report-tools-installer.sh
 ```
 
 Installer sẽ:
@@ -122,6 +144,8 @@ Installer sẽ:
 
 ### Cấu hình `.team-tools/.env`
 
+Thành viên điền Web App URL do leader cung cấp vào `.team-tools/.env`:
+
 ```env
 # Optional: override git config user.name
 # REPORT_AUTHOR="Nguyen Van A"
@@ -129,7 +153,7 @@ Installer sẽ:
 # Google Apps Script Web App endpoint
 SHEETS_WEBHOOK_URL="https://script.google.com/macros/s/.../exec"
 
-# Optional: nếu Code.gs có REPORT_SECRET
+# Optional: nếu leader có bật REPORT_SECRET trong Code.gs
 # REPORT_SECRET="change-me"
 ```
 
@@ -140,17 +164,6 @@ export SHEETS_WEBHOOK_URL="https://script.google.com/macros/s/.../exec"
 export REPORT_AUTHOR="Nguyen Van A"
 export REPORT_SECRET="change-me"
 ```
-
-### Cài Google Apps Script
-
-1. Mở Google Sheet nhận report.
-2. Vào `Extensions` > `Apps Script`.
-3. Paste nội dung `google-apps-script/Code.gs`.
-4. Kiểm tra `SPREADSHEET_ID` trong `Code.gs`.
-5. Deploy dạng `Web app`:
-   - `Execute as`: `Me`
-   - `Who has access`: `Anyone`
-6. Copy Web App URL kết thúc bằng `/exec` vào `.team-tools/.env`.
 
 ## Cách sử dụng
 
