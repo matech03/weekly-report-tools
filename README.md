@@ -2,7 +2,11 @@
 
 Bộ tool nhẹ để chuẩn hóa commit message và gửi báo cáo commit hằng tuần lên Google Sheets.
 
-## Cấu trúc project
+**Mục lục:** [Tổng quan](#tổng-quan) · [Leader](#leader) · [Dev](#dev)
+
+## Tổng quan
+
+### Cấu trúc project
 
 ```text
 weekly-report-tools/
@@ -21,9 +25,9 @@ weekly-report-tools/
     └── weekly-report/SKILL.md       # Skill report cho Codex
 ```
 
-## Tính năng
+### Tính năng
 
-### Commit rule
+#### Commit rule
 
 Hook `commit-msg` chỉ cho phép commit message có prefix:
 
@@ -41,15 +45,7 @@ Rule đang enforce:
 - Reject message quá chung chung như `update code`, `fix bug`, `cleanup`, `misc`
 - Bỏ qua validate cho `Merge`, `Revert`, `fixup!`, `squash!`
 
-Ví dụ hợp lệ:
-
-```text
-TASK: Thêm bộ lọc báo cáo theo tuần
-BUG: Sửa lỗi gửi payload khi webhook lỗi
-UPDATE: Cập nhật định dạng báo cáo tuần
-```
-
-### Weekly report
+#### Weekly report
 
 `report.py` tổng hợp commit theo author và tuần, sau đó gửi lên Google Sheets.
 
@@ -75,7 +71,7 @@ Others = Bugs + Updates + Other cũ
 
 Cột `Note` thủ công trong Google Sheets sẽ được giữ lại khi submit lại cùng tuần/member/repository.
 
-### Claude/Codex report skill
+#### Claude/Codex report skill
 
 Sau khi cài đặt, có thể gọi report bằng:
 
@@ -87,15 +83,13 @@ preview report
 
 Mặc định `report` sẽ gửi lên Google Sheets. Chỉ chạy preview khi prompt có ý rõ như `preview`, `xem trước`, `dry-run`.
 
-## Cài đặt
-
 ### Yêu cầu
 
 - Git 2.x
 - Python 3.7+
 - Google Apps Script Web App URL kết thúc bằng `/exec`
 
-### Dành cho leader
+## Leader
 
 Leader chuẩn bị Google Sheet và webhook dùng chung cho team:
 
@@ -107,67 +101,27 @@ Leader chuẩn bị Google Sheet và webhook dùng chung cho team:
    - `Execute as`: `Me`
    - `Who has access`: `Anyone`
 6. Copy Web App URL kết thúc bằng `/exec`.
-7. Gửi Web App URL cho các thành viên để cấu hình `SHEETS_WEBHOOK_URL`.
+7. Cập nhật URL này vào cấu hình mặc định của installer nếu webhook thay đổi.
 
-Nếu cần bảo vệ webhook, leader đặt `REPORT_SECRET` trong `Code.gs` và gửi cùng giá trị đó cho thành viên.
+Nếu cần bảo vệ webhook, leader đặt `REPORT_SECRET` trong `Code.gs` và cấu hình cùng giá trị đó trong installer.
 
-### Dành cho thành viên
+## Dev
 
-Chạy trong thư mục root của project cần dùng report.
+### 1. Cài đặt 1 lần
 
-Bước 1: download installer về project:
+Chạy trong thư mục root của project cần dùng report:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/matech03/weekly-report-tools/main/report-tools-installer.sh -o report-tools-installer.sh
-```
-
-Bước 2: chạy installer:
-
-```bash
 bash report-tools-installer.sh
-```
-
-Bước 3: xoá file installer sau khi cài xong:
-
-```bash
 rm report-tools-installer.sh
 ```
 
-Installer sẽ:
+Installer sẽ tự cài hook commit, tool report, Claude/Codex skill và cấu hình report mặc định.
 
-- Copy `scripts/report.py` vào `.team-tools/report.py`
-- Cài `hooks/commit-msg` vào `.git/hooks/commit-msg`
-- Copy Claude/Codex weekly report skill vào project
-- Tạo `.team-tools/.env` nếu chưa có
-- Thêm `.team-tools/` vào `.gitignore`
-- Backup hook cũ nếu `.git/hooks/commit-msg` đã tồn tại
+### 2. Commit hằng ngày
 
-### Cấu hình `.team-tools/.env`
-
-Thành viên điền Web App URL do leader cung cấp vào `.team-tools/.env`:
-
-```env
-# Optional: override git config user.name
-# REPORT_AUTHOR="Nguyen Van A"
-
-# Google Apps Script Web App endpoint
-SHEETS_WEBHOOK_URL="https://script.google.com/macros/s/.../exec"
-
-# Optional: nếu leader có bật REPORT_SECRET trong Code.gs
-# REPORT_SECRET="change-me"
-```
-
-Environment variables có thể override `.env`:
-
-```bash
-export SHEETS_WEBHOOK_URL="https://script.google.com/macros/s/.../exec"
-export REPORT_AUTHOR="Nguyen Van A"
-export REPORT_SECRET="change-me"
-```
-
-## Cách sử dụng
-
-### Commit
+Commit theo đúng prefix để cuối tuần report tự phân loại:
 
 ```bash
 git commit -m "TASK: Thêm bộ lọc báo cáo theo tuần"
@@ -175,7 +129,7 @@ git commit -m "BUG: Sửa lỗi gửi payload khi webhook lỗi"
 git commit -m "UPDATE: Cập nhật định dạng báo cáo tuần"
 ```
 
-Các message sau sẽ bị reject:
+Các message quá chung chung sẽ bị reject:
 
 ```bash
 git commit -m "update code"
@@ -183,33 +137,28 @@ git commit -m "BUG: fix bug"
 git commit -m "TASK: sửa lỗi"
 ```
 
-### Preview report
+### 3. Cuối tuần report
 
-```bash
-python .team-tools/report.py --dry-run
-```
-
-### Gửi report tuần hiện tại
+Gửi report tuần hiện tại:
 
 ```bash
 python .team-tools/report.py
 ```
 
-### Gửi report cho tuần cụ thể
+Xem trước, chưa gửi lên Google Sheets:
 
-Dùng ISO week đầy đủ:
+```bash
+python .team-tools/report.py --dry-run
+```
+
+Report tuần cụ thể:
 
 ```bash
 python .team-tools/report.py --week 2026-W24
-```
-
-Hoặc chỉ truyền số tuần, tool sẽ dùng ISO year hiện tại:
-
-```bash
 python .team-tools/report.py --week W24
 ```
 
-### Gửi report cho author cụ thể
+Report cho author cụ thể:
 
 ```bash
 python .team-tools/report.py --author "Nguyen Van A"
@@ -221,45 +170,19 @@ Có thể kết hợp nhiều option:
 python .team-tools/report.py --week W24 --author "Nguyen Van A" --dry-run
 ```
 
-### Thêm summary notes
-
-```bash
-python .team-tools/report.py --performance-file /tmp/performance.txt
-```
-
-File summary nên gồm 2-5 bullet ngắn:
-
-```text
-- Hoàn thiện rule commit cho team
-- Cập nhật weekly report gửi Google Sheets
-- Bổ sung migrate dữ liệu Bugs/Updates sang Others
-```
-
-Nếu không truyền summary notes, cột `Summary` sẽ để trống nhưng report vẫn gửi bình thường.
-
-### Dùng bằng Claude/Codex skill
-
-Submit report:
+Dùng Claude/Codex:
 
 ```text
 report
 báo cáo tuần
 /report
-```
-
-Preview report:
-
-```text
 preview report
 xem trước report
-```
-
-Report tuần cụ thể:
-
-```text
 report W24
 báo cáo tuần W24 của dev3
 ```
+
+Nếu không truyền summary notes, cột `Summary` sẽ để trống nhưng report vẫn gửi bình thường.
 
 ### Troubleshooting nhanh
 
@@ -275,10 +198,10 @@ Chạy report với author chính xác:
 python .team-tools/report.py --author "Exact Git Author Name" --dry-run
 ```
 
-Nếu gặp HTTP 401/403 từ Apps Script, kiểm tra lại deployment:
+Nếu gặp HTTP 401/403 từ Apps Script, leader kiểm tra lại deployment:
 
 - `Execute as`: `Me`
 - `Who has access`: `Anyone`
-- URL trong `.env` phải là Web App URL kết thúc bằng `/exec`
+- Web App URL trong cấu hình mặc định phải kết thúc bằng `/exec`
 
-Nếu gặp `Unauthorized`, đảm bảo `REPORT_SECRET` trong `.env` giống với `REPORT_SECRET` trong `Code.gs`.
+Nếu gặp `Unauthorized`, leader kiểm tra `REPORT_SECRET` trong `Code.gs` và cấu hình mặc định của installer.
