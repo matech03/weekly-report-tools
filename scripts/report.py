@@ -178,7 +178,21 @@ def read_performance_override(args):
 
     return ""
 
-def print_summary(author, repo, week_label, commits, performance=""):
+def read_note_override(args):
+    """Nhận nội dung Note do user nhập trong prompt nhiều dòng."""
+    if args.note_file:
+        try:
+            with open(args.note_file, "r", encoding="utf-8") as f:
+                return True, f.read()
+        except Exception:
+            return False, ""
+
+    if args.note is not None:
+        return True, args.note
+
+    return False, ""
+
+def print_summary(author, repo, week_label, commits, performance="", note=""):
     tasks = [c for c in commits if c["type"] == "TASK"]
     other = [c for c in commits if c["type"] != "TASK"]
 
@@ -210,6 +224,11 @@ def print_summary(author, repo, week_label, commits, performance=""):
                 print(f"     {line.strip()}")
     else:
         print(f"\n{YELLOW}  📌 SUMMARY NOTES: để trống (agent không cung cấp summary){RESET}")
+
+    if note:
+        print(f"\n{CYAN}{BOLD}  📝 NOTE{RESET}")
+        for line in note.splitlines():
+            print(f"     {line}")
 
     print(f"\n{CYAN}{'═'*58}{RESET}\n")
 
@@ -277,6 +296,10 @@ def main():
                         help="Summary notes do agent tổng hợp sẵn")
     parser.add_argument("--performance-file",
                         help="File chứa summary notes do agent tổng hợp sẵn")
+    parser.add_argument("--note",
+                        help="Nội dung cột Note do user nhập")
+    parser.add_argument("--note-file",
+                        help="File chứa nội dung cột Note do user nhập")
     args = parser.parse_args()
 
     config = load_config()
@@ -311,7 +334,11 @@ def main():
     else:
         print(f"🧠  Summary notes: {YELLOW}không có nội dung từ agent, để trống{RESET}")
 
-    print_summary(author, repo, f"{week_id} ({week_range})", commits, performance)
+    note_provided, note = read_note_override(args)
+    if note_provided:
+        print(f"📝  Note: {GREEN}dùng nội dung user nhập từ prompt{RESET}")
+
+    print_summary(author, repo, f"{week_id} ({week_range})", commits, performance, note)
 
     # Gửi lên Sheets
     if args.dry_run:
@@ -348,6 +375,8 @@ def main():
         "performance": performance,
         "commits": commits
     }
+    if note_provided:
+        payload["note"] = note
 
     ok, msg = send_to_sheets(webhook_url, payload)
     if ok:

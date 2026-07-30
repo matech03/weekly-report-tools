@@ -177,12 +177,14 @@ function writeSummaryRow(data) {
   const sheet = ss.getSheetByName(SHEET_SUMMARY);
   const otherCount = Number(data.summary.other || 0) +
     Number(data.summary.bug || 0) + Number(data.summary.update || 0);
+  const noteProvided = Object.prototype.hasOwnProperty.call(data, "note");
+  const incomingNote = noteProvided ? (data.note || "") : "";
 
   // Kiểm tra nếu đã có row của tuần+author này thì update
   const values = sheet.getDataRange().getValues();
   for (let i = 1; i < values.length; i++) {
     if (values[i][0] === data.week && values[i][2] === data.author && values[i][3] === data.repo) {
-      const note = values[i][8] || "";
+      const note = noteProvided ? incomingNote : (values[i][8] || "");
       sheet.getRange(i + 1, 1, 1, SUMMARY_HEADERS.length).setValues([[
         data.week, data.submitted_at, data.author, data.repo,
         data.summary.total, data.summary.task, otherCount,
@@ -196,7 +198,7 @@ function writeSummaryRow(data) {
   sheet.appendRow([
     data.week, data.submitted_at, data.author, data.repo,
     data.summary.total, data.summary.task, otherCount,
-    data.summary_note || data.performance || "", ""
+    data.summary_note || data.performance || "", incomingNote
   ]);
 
 }

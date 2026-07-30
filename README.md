@@ -69,7 +69,7 @@ Nếu Google Sheet đang có layout cũ với cột `Bugs` và `Updates`, Apps S
 Others = Bugs + Updates + Other cũ
 ```
 
-Cột `Note` thủ công trong Google Sheets sẽ được giữ lại khi submit lại cùng tuần/member/repository.
+Cột `Note` trong Google Sheets có thể nhập từ prompt nhiều dòng khi dùng Claude/Codex. Nếu không gửi note mới, giá trị `Note` hiện có sẽ được giữ lại khi submit lại cùng tuần/member/repository.
 
 #### Claude/Codex report skill
 
@@ -82,6 +82,14 @@ preview report
 ```
 
 Mặc định `report` sẽ gửi lên Google Sheets. Chỉ chạy preview khi prompt có ý rõ như `preview`, `xem trước`, `dry-run`.
+
+Khi dùng AI generate, dòng đầu là yêu cầu báo cáo; từ dòng thứ 2 trở đi là nội dung cột `Note` và có thể ghi bất kỳ:
+
+```text
+báo cáo tuần W30
+Kế hoạch tuần tới: hoàn thiện flow thanh toán
+Vấn đề trong tuần: chờ API từ backend
+```
 
 ### Yêu cầu
 
@@ -164,10 +172,18 @@ Report cho author cụ thể:
 python .team-tools/report.py --author "Nguyen Van A"
 ```
 
+Gửi nội dung cột `Note` trực tiếp:
+
+```bash
+python .team-tools/report.py --note "Kế hoạch tuần tới: hoàn thiện flow thanh toán"
+python .team-tools/report.py --note-file /path/to/note.txt
+```
+
 Có thể kết hợp nhiều option:
 
 ```bash
 python .team-tools/report.py --week W24 --author "Nguyen Van A" --dry-run
+python .team-tools/report.py --week W24 --note-file /path/to/note.txt
 ```
 
 Dùng Claude/Codex:
@@ -180,9 +196,12 @@ preview report
 xem trước report
 report W24
 báo cáo tuần W24 của dev3
+báo cáo tuần W30
+Kế hoạch tuần tới: hoàn thiện flow thanh toán
+Vấn đề trong tuần: chờ API từ backend
 ```
 
-Nếu không truyền summary notes, cột `Summary` sẽ để trống nhưng report vẫn gửi bình thường.
+Nếu không truyền summary notes, cột `Summary` sẽ để trống nhưng report vẫn gửi bình thường. Nếu không truyền note, cột `Note` hiện có trên Google Sheets sẽ được giữ nguyên khi submit lại.
 
 ### Troubleshooting nhanh
 

@@ -69,7 +69,17 @@ Treat these as requests to use this skill:
 2. Check that `.team-tools/report.py` exists.
    - If it does not exist, explain that weekly-report-tools is not installed in
      this project and point to the install command in this repository README.
-3. Before running the report, inspect the weekly commits and code changes as the
+3. If the user's prompt has multiple lines, treat only the first line as the
+   report request, for example `báo cáo tuần`, `report weekly`, or
+   `báo cáo tuần W30`. Treat every line from the second line onward as the
+   content for the Google Sheets `Note` column.
+   - Preserve the note content as user-written; do not summarize, rewrite, or
+     merge it into the `Summary` notes.
+   - Save the note content to a temporary text file and pass it with
+     `--note-file /path/to/note.txt`.
+   - If the prompt has only one line, omit `--note-file` so an existing manual
+     `Note` value in Google Sheets is preserved on resubmit.
+4. Before running the report, inspect the weekly commits and code changes as the
    current agent. Use commands such as:
 
    ```bash
@@ -83,25 +93,27 @@ Treat these as requests to use this skill:
    - Keep each bullet under 90 characters.
    - Make each bullet easy to scan; avoid paragraphs and long explanations.
 
-4. For a normal report request, submit immediately and pass the agent-generated
-   notes:
+5. For a normal report request, submit immediately and pass the agent-generated
+   summary notes. Include `--note-file` when the user supplied note content:
 
    ```bash
    python .team-tools/report.py --performance-file /path/to/summary.txt
+   python .team-tools/report.py --performance-file /path/to/summary.txt --note-file /path/to/note.txt
    ```
 
    The script sends the `Summary` notes to Google Sheets. If the agent
    cannot analyze the changes, omit `--performance-file`; the Summary field
    will be left blank.
 
-5. Only preview when the user explicitly asks with words such as `preview`,
+6. Only preview when the user explicitly asks with words such as `preview`,
    `xem trước`, `xem truoc`, `xem thử`, `xem thu`, or `dry-run`:
 
    ```bash
    python .team-tools/report.py --dry-run --performance-file /path/to/summary.txt
+   python .team-tools/report.py --dry-run --performance-file /path/to/summary.txt --note-file /path/to/note.txt
    ```
 
-6. If the user specifies a week, pass it through as ISO week (`YYYY-Www`) or week number (`Www`). Week numbers without a year use the current ISO year:
+7. If the user specifies a week on the first line, pass it through as ISO week (`YYYY-Www`) or week number (`Www`). Week numbers without a year use the current ISO year:
 
    ```bash
    python .team-tools/report.py --week YYYY-Www --performance-file /path/to/summary.txt
@@ -110,7 +122,7 @@ Treat these as requests to use this skill:
    python .team-tools/report.py --week Www --dry-run --performance-file /path/to/summary.txt
    ```
 
-7. If the user specifies an author, pass it through. Treat phrases such as
+8. If the user specifies an author on the first line, pass it through. Treat phrases such as
    `báo cáo tuần của dev3`, `report của dev3`, or `weekly report for dev3` as
    author-specific report requests:
 
@@ -127,6 +139,8 @@ Treat these as requests to use this skill:
   submitting anything; report that result to the user.
 - Use `--dry-run` only when the request explicitly asks to preview or view
   before sending.
+- User-written note content belongs only in the `Note` column. Do not include it
+  in the generated `Summary` column.
 - Summary analysis is best-effort. The current agent should do it before
   running `report.py`. Do not block the report if the agent cannot analyze the
   changes; omit `--performance-file` and submit with a blank Summary field.
