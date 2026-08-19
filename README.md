@@ -83,7 +83,31 @@ preview report
 
 Mặc định `report` sẽ gửi lên Google Sheets. Chỉ chạy preview khi prompt có ý rõ như `preview`, `xem trước`, `dry-run`.
 
-Khi dùng AI generate, dòng đầu là yêu cầu báo cáo; từ dòng thứ 2 trở đi là nội dung cột `Note` và có thể ghi bất kỳ:
+Prompt report có thể dùng cấu trúc 3 dòng để điền cột `Summary`:
+
+```text
+report
+Vấn đề 1; Vấn đề 2
+Plan 1; Plan 2
+```
+
+- Dòng 1 là câu lệnh report để mapping skill.
+- Dòng 2 là `Vấn đề`; nếu có nhiều ý thì cách nhau bằng dấu `;` trên cùng dòng.
+- Dòng 3 là `Plan tuần tới`; nếu có nhiều ý thì cách nhau bằng dấu `;` trên cùng dòng.
+
+`report.py` và Google Apps Script sẽ tự parse dòng 2/3 thành:
+
+```text
+Vấn đề:
+- ý 1
+- ý 2
+
+Plan tuần tới:
+- ý 1
+- ý 2
+```
+
+Nếu prompt nhiều dòng nhưng không theo cấu trúc 3 dòng trên, dòng đầu là yêu cầu báo cáo; từ dòng thứ 2 trở đi là nội dung cột `Note` và có thể ghi bất kỳ:
 
 ```text
 báo cáo tuần W30
@@ -201,6 +225,27 @@ Kế hoạch tuần tới: hoàn thiện flow thanh toán
 Vấn đề trong tuần: chờ API từ backend
 ```
 
+Nếu muốn gửi kèm vấn đề và plan tuần tới vào cột `Summary`, nhập 3 dòng:
+
+```text
+report
+Không có blocker; Cần chờ review API
+Hoàn tất màn hình report; Bổ sung test webhook
+```
+
+Google Sheets sẽ lưu vào cột `Summary` theo dạng:
+
+```text
+Vấn đề:
+- Không có blocker
+- Cần chờ review API
+
+Plan tuần tới:
+- Hoàn tất màn hình report
+- Bổ sung test webhook
+```
+
+Nếu muốn gửi nội dung cột `Note`, dùng prompt nhiều dòng không theo cấu trúc summary 3 dòng, hoặc dùng `--note`/`--note-file`.
 Nếu không truyền summary notes, cột `Summary` sẽ để trống nhưng report vẫn gửi bình thường. Nếu không truyền note, cột `Note` hiện có trên Google Sheets sẽ được giữ nguyên khi submit lại.
 
 ### Troubleshooting nhanh

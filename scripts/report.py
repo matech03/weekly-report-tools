@@ -143,38 +143,113 @@ def fetch_commits(author, since, until):
 
     return commits
 
+def clean_prompt_line(line):
+    """Bỏ marker/bullet thường gặp ở đầu dòng prompt."""
+    return line.strip().lstrip("-*•0123456789. )\t").strip()
+
+
+def truncate_note_line(line, max_line_chars=90):
+    if len(line) <= max_line_chars:
+        return line
+    return line[:max_line_chars - 1].rstrip(" ,.;:-") + "..."
+
+
+def strip_prompt_section_label(line):
+    """Cho phép user ghi kèm nhãn `Vấn đề:` hoặc `Plan tuần tới:`."""
+    return re.sub(
+        r"^(vấn đề|van de|plan tuần tới|plan tuan toi)\s*[:：-]\s*",
+        "",
+        clean_prompt_line(line),
+        flags=re.IGNORECASE,
+    ).strip()
+
+
+def split_semicolon_items(line, max_line_chars=90):
+    """Tách các ý được ngăn cách bằng dấu ; trên cùng một dòng."""
+    items = []
+    for item in line.split(";"):
+        item = clean_prompt_line(item)
+        if item:
+            items.append(truncate_note_line(item, max_line_chars))
+    return items
+
+
+def is_report_command(line):
+    """Nhận diện dòng đầu dùng để mapping weekly-report skill."""
+    command = clean_prompt_line(line).lower()
+    return (
+        command.startswith("/report")
+        or "report" in command
+        or "báo cáo" in command
+        or "bao cao" in command
+        or command.startswith("bc tuần")
+        or command.startswith("bc tuan")
+        or command.startswith("bct")
+        or "weekly" in command
+    )
+
+
+def format_structured_prompt_notes(text, max_line_chars=90):
+    """Parse prompt 3 dòng: command, vấn đề, plan tuần tới."""
+    lines = [clean_prompt_line(line) for line in text.splitlines() if clean_prompt_line(line)]
+    if len(lines) < 3 or not is_report_command(lines[0]):
+        return ""
+
+    issues = split_semicolon_items(strip_prompt_section_label(lines[1]), max_line_chars)
+    plans = split_semicolon_items(strip_prompt_section_label(lines[2]), max_line_chars)
+    if not issues and not plans:
+        return ""
+
+    formatted = []
+    if issues:
+        formatted.append("Vấn đề:")
+        formatted.extend(f"- {item}" for item in issues)
+    if plans:
+        if formatted:
+            formatted.append("")
+        formatted.append("Plan tuần tới:")
+        formatted.extend(f"- {item}" for item in plans)
+    return "\n".join(formatted)
+
+
 def normalize_performance_notes(text, max_lines=5, max_line_chars=90):
     """Chuẩn hóa summary notes thành các ý ngắn, dễ đọc trong một cell."""
     if not text:
         return ""
 
+    structured_notes = format_structured_prompt_notes(text, max_line_chars)
+    if structured_notes:
+        return structured_notes
+
+    stripped_text = text.strip()
+    lowered_text = stripped_text.lower()
+    if "vấn đề:" in lowered_text and "plan tuần tới:" in lowered_text:
+        return stripped_text
+
     lines = []
     for raw_line in text.splitlines():
-        line = raw_line.strip()
+        line = clean_prompt_line(raw_line)
         if not line:
             continue
-        line = line.lstrip("-*•0123456789. )\t").strip()
-        if not line:
-            continue
-        if len(line) > max_line_chars:
-            line = line[:max_line_chars - 1].rstrip(" ,.;:-") + "..."
+        line = truncate_note_line(line, max_line_chars)
         lines.append(f"- {line}")
         if len(lines) >= max_lines:
             break
 
     return "\n".join(lines)
 
-def read_performance_override(args):
-    """Nhận summary notes do agent đang chạy report tự tổng hợp."""
+
+def read_performance_source(args):
+    """Nhận raw summary/prompt notes do agent đang chạy report cung cấp."""
     if args.performance_file:
         try:
             with open(args.performance_file, "r", encoding="utf-8") as f:
-                return normalize_performance_notes(f.read())
+                return f.read()
         except Exception:
             return ""
 
     if args.performance:
-        return normalize_performance_notes(args.performance)
+        return args.performance
 
     return ""
 
@@ -242,7 +317,7 @@ def send_to_sheets(webhook_url, payload):
         method="POST"
     )
     try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
+        with urllib.request.urlopen(req, timeout=60) as resp:
             body = resp.read().decode("utf-8")
             try:
                 response = json.loads(body)
@@ -293,9 +368,9 @@ def main():
     parser.add_argument("--dry-run", action="store_true",
                         help="Chỉ in ra màn hình, không gửi lên Sheets")
     parser.add_argument("--performance",
-                        help="Summary notes do agent tổng hợp sẵn")
+                        help="Summary/prompt notes do agent hoặc user cung cấp")
     parser.add_argument("--performance-file",
-                        help="File chứa summary notes do agent tổng hợp sẵn")
+                        help="File chứa summary/prompt notes do agent hoặc user cung cấp")
     parser.add_argument("--note",
                         help="Nội dung cột Note do user nhập")
     parser.add_argument("--note-file",
@@ -328,11 +403,12 @@ def main():
         print("   Kiểm tra lại: git log --author='<tên>' --since='<week start>' --until='<week end>'")
         sys.exit(0)
 
-    performance = read_performance_override(args)
+    performance_source = read_performance_source(args)
+    performance = normalize_performance_notes(performance_source)
     if performance:
-        print(f"🧠  Summary notes: {GREEN}dùng nội dung do agent tổng hợp{RESET}")
+        print(f"🧠  Summary notes: {GREEN}dùng nội dung do agent/user cung cấp{RESET}")
     else:
-        print(f"🧠  Summary notes: {YELLOW}không có nội dung từ agent, để trống{RESET}")
+        print(f"🧠  Summary notes: {YELLOW}không có nội dung từ agent/user, để trống{RESET}")
 
     note_provided, note = read_note_override(args)
     if note_provided:
@@ -373,6 +449,7 @@ def main():
         },
         "summary_note": performance,
         "performance": performance,
+        "report_prompt": performance_source,
         "commits": commits
     }
     if note_provided:

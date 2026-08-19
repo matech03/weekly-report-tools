@@ -14,18 +14,50 @@ Treat these as weekly report requests: `report`, `report báo cáo tuần`,
 Use the command arguments to decide whether this is a submission or preview.
 Default to submission.
 
-If the user prompt has multiple lines, treat the first line as the report
-request, for example `báo cáo tuần`, `report weekly`, or `báo cáo tuần W30`.
-Treat every line from the second line onward as the Google Sheets `Note` column
-content. Preserve that note exactly as user-written, save it to a temporary
-text file, and pass it with `--note-file /path/to/note.txt`. Do not merge this
-user note into the generated `Summary` notes.
+## Prompt structure
 
-Before running `report.py`, inspect the weekly commits and code changes as the
-current agent. Use `git log --no-merges --stat` and
-`git show --stat --patch <commit>` for the selected author/week. Summarize 2-5
-concise Vietnamese notes about what the developer worked on in the project and
-save them to a temporary text file.
+The user may provide a 3-line report prompt for the Google Sheets `Summary` column:
+
+```text
+report
+Vấn đề 1; Vấn đề 2
+Plan 1; Plan 2
+```
+
+- Line 1 is the report command used to map the skill. It may include week,
+  author, or preview words, for example `preview report W24 của dev3`.
+- Line 2 is `Vấn đề`; multiple issue items are separated by `;` on the same line.
+- Line 3 is `Plan tuần tới`; multiple plan items are separated by `;` on the same line.
+
+If line 2 and line 3 are present, save the original 3-line prompt to the summary
+file and pass it to `report.py`. `report.py`/Google Apps Script will format it as:
+
+```text
+Vấn đề:
+- ý 1
+- ý 2
+
+Plan tuần tới:
+- ý 1
+- ý 2
+```
+
+User-provided issue/plan lines take priority over agent-generated summary notes.
+If the prompt has multiple lines but does not match the 3-line summary structure,
+treat the first line as the report request and every line from the second line
+onward as the Google Sheets `Note` column content. Preserve that note exactly as
+user-written, save it to a temporary text file, and pass it with
+`--note-file /path/to/note.txt`. Do not merge this user note into the generated
+`Summary` notes.
+
+Before running `report.py`, verify `.team-tools/report.py` exists. If it is
+missing, explain that weekly-report-tools has not been installed in this project.
+
+If the user did not supply the 3-line prompt structure, inspect the weekly
+commits and code changes as the current agent. Use `git log --no-merges --stat`
+and `git show --stat --patch <commit>` for the selected author/week. Summarize
+2-5 concise Vietnamese notes about what the developer worked on in the project
+and save them to a temporary text file.
 Use bullet lines starting with `- `, keep each bullet under 90 characters, and
 avoid paragraphs or long explanations.
 
@@ -36,9 +68,8 @@ avoid paragraphs or long explanations.
   python .team-tools/report.py --performance-file /path/to/summary.txt --note-file /path/to/note.txt
   ```
 
-  The script sends the `Summary` notes to Google Sheets. If the current
-  agent cannot analyze the changes, omit `--performance-file`; the Summary
-  field will be left blank.
+  If neither user-provided issue/plan notes nor agent summary notes are
+  available, omit `--performance-file`; the Summary field will be left blank.
 
 - If the user explicitly asks to `preview`, `xem trước`, `xem truoc`,
   `xem thử`, `xem thu`, or `dry-run`, run:
@@ -64,13 +95,10 @@ avoid paragraphs or long explanations.
   python .team-tools/report.py --author "Author Name" --performance-file /path/to/summary.txt
   ```
 
-Before running, verify `.team-tools/report.py` exists. If it is missing, explain
-that weekly-report-tools has not been installed in this project.
-
-Summary analysis is best-effort. The current agent should do it before running
-`report.py`. Do not block the report if the agent cannot analyze the changes;
-omit `--performance-file` and submit with a blank Summary field. User-written
-note content belongs only in the `Note` column.
+Summary analysis is best-effort. Do not block the report if the current agent
+cannot analyze the changes; omit `--performance-file` and submit with a blank
+Summary field. User-written note content belongs only in the `Note` column unless
+it matches the 3-line issue/plan summary structure above.
 
 The report excludes merge commits. If the selected author/week has no commits,
 the script exits without submitting anything; report that result to the user.

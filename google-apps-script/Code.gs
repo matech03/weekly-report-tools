@@ -49,11 +49,11 @@ function doPost(e) {
     }
     
     ensureSheetsExist();
-    writeWeekRow(data);
-    writeSummaryRow(data);
-    writeCommitRows(data);
-    formatWorkbook();
-    
+    const weekRow = writeWeekRow(data);
+    const summaryRow = writeSummaryRow(data);
+    const commitRows = writeCommitRows(data);
+    formatChangedRows(summaryRow, commitRows, weekRow);
+
     return ContentService
       .createTextOutput(JSON.stringify({ 
         status: "ok", 
@@ -106,12 +106,13 @@ function ensureSheetsExist() {
 }
 
 function migrateSummarySheet(sheet) {
-  const values = sheet.getDataRange().getValues();
-  if (!values.length) return;
-
-  const headers = values[0];
+  const headerColCount = Math.max(sheet.getLastColumn(), SUMMARY_HEADERS.length);
+  const headers = sheet.getRange(1, 1, 1, headerColCount).getValues()[0];
   const hasOldCountColumns = headers[6] === "Bugs" && headers[7] === "Updates";
   if (!hasOldCountColumns && sheet.getMaxColumns() <= SUMMARY_HEADERS.length) return;
+
+  const values = sheet.getDataRange().getValues();
+  if (!values.length) return;
 
   const rows = values.map((row, index) => {
     if (index === 0) return SUMMARY_HEADERS;
@@ -164,12 +165,80 @@ function writeWeekRow(data) {
 
   for (let i = 1; i < values.length; i++) {
     if (values[i][0] === data.week) {
-      sheet.getRange(i + 1, 1, 1, WEEK_HEADERS.length).setValues([row]);
-      return;
+      const rowNumber = i + 1;
+      sheet.getRange(rowNumber, 1, 1, WEEK_HEADERS.length).setValues([row]);
+      return rowNumber;
     }
   }
 
-  sheet.appendRow(row);
+  const rowNumber = sheet.getLastRow() + 1;
+  sheet.getRange(rowNumber, 1, 1, WEEK_HEADERS.length).setValues([row]);
+  return rowNumber;
+}
+
+function buildSummaryNote(data) {
+  const fallback = data.summary_note || data.performance || "";
+  return parseStructuredReportPrompt(data.report_prompt) ||
+    parseStructuredReportPrompt(fallback) || fallback;
+}
+
+function parseStructuredReportPrompt(text) {
+  if (!text) return "";
+
+  const lines = String(text)
+    .split(/\r?\n/)
+    .map(cleanPromptLine)
+    .filter(Boolean);
+
+  if (lines.length < 3 || !isReportCommand(lines[0])) return "";
+
+  const issues = splitSemicolonItems(stripPromptSectionLabel(lines[1]));
+  const plans = splitSemicolonItems(stripPromptSectionLabel(lines[2]));
+  if (!issues.length && !plans.length) return "";
+
+  const formatted = [];
+  if (issues.length) {
+    formatted.push("Vấn đề:");
+    issues.forEach(item => formatted.push(`- ${item}`));
+  }
+  if (plans.length) {
+    if (formatted.length) formatted.push("");
+    formatted.push("Plan tuần tới:");
+    plans.forEach(item => formatted.push(`- ${item}`));
+  }
+  return formatted.join("\n");
+}
+
+function cleanPromptLine(line) {
+  return String(line || "")
+    .trim()
+    .replace(/^[-*•\d.\s)]+/, "")
+    .trim();
+}
+
+function stripPromptSectionLabel(line) {
+  return String(line || "")
+    .replace(/^(vấn đề|van de|plan tuần tới|plan tuan toi)\s*[:：-]\s*/i, "")
+    .trim();
+}
+
+function splitSemicolonItems(line) {
+  return String(line || "")
+    .split(";")
+    .map(cleanPromptLine)
+    .filter(Boolean);
+}
+
+function isReportCommand(line) {
+  const command = cleanPromptLine(line).toLowerCase();
+  return command.startsWith("/report") ||
+    command.includes("report") ||
+    command.includes("báo cáo") ||
+    command.includes("bao cao") ||
+    command.startsWith("bc tuần") ||
+    command.startsWith("bc tuan") ||
+    command.startsWith("bct") ||
+    command.includes("weekly");
 }
 
 function writeSummaryRow(data) {
@@ -177,68 +246,96 @@ function writeSummaryRow(data) {
   const sheet = ss.getSheetByName(SHEET_SUMMARY);
   const otherCount = Number(data.summary.other || 0) +
     Number(data.summary.bug || 0) + Number(data.summary.update || 0);
+  const summaryNote = buildSummaryNote(data);
   const noteProvided = Object.prototype.hasOwnProperty.call(data, "note");
   const incomingNote = noteProvided ? (data.note || "") : "";
 
   // Kiểm tra nếu đã có row của tuần+author này thì update
   const values = sheet.getDataRange().getValues();
+  const row = [
+    data.week, data.submitted_at, data.author, data.repo,
+    data.summary.total, data.summary.task, otherCount,
+    summaryNote, incomingNote
+  ];
+
   for (let i = 1; i < values.length; i++) {
     if (values[i][0] === data.week && values[i][2] === data.author && values[i][3] === data.repo) {
-      const note = noteProvided ? incomingNote : (values[i][8] || "");
-      sheet.getRange(i + 1, 1, 1, SUMMARY_HEADERS.length).setValues([[
-        data.week, data.submitted_at, data.author, data.repo,
-        data.summary.total, data.summary.task, otherCount,
-        data.summary_note || data.performance || "", note
-      ]]);
-      return;
+      const rowNumber = i + 1;
+      row[8] = noteProvided ? incomingNote : (values[i][8] || "");
+      sheet.getRange(rowNumber, 1, 1, SUMMARY_HEADERS.length).setValues([row]);
+      return rowNumber;
     }
   }
 
-  // Thêm row mới
-  sheet.appendRow([
-    data.week, data.submitted_at, data.author, data.repo,
-    data.summary.total, data.summary.task, otherCount,
-    data.summary_note || data.performance || "", incomingNote
-  ]);
-
+  const rowNumber = sheet.getLastRow() + 1;
+  sheet.getRange(rowNumber, 1, 1, SUMMARY_HEADERS.length).setValues([row]);
+  return rowNumber;
 }
 
 function writeCommitRows(data) {
   const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sheet = ss.getSheetByName(SHEET_COMMITS);
-  
-  // Xoá các commit cũ của author+repo+week này
   const values = sheet.getDataRange().getValues();
-  const rowsToDelete = [];
-  for (let i = values.length - 1; i >= 1; i--) {
-    if (values[i][0] === data.week && values[i][1] === data.author && values[i][2] === data.repo) {
-      rowsToDelete.push(i + 1);
-    }
-  }
-  rowsToDelete.forEach(r => sheet.deleteRow(r));
-  
-  // Ghi lại toàn bộ commits mới
-  data.commits.forEach(commit => {
+  const keptRows = values.slice(1)
+    .filter(row => !(row[0] === data.week && row[1] === data.author && row[2] === data.repo))
+    .map(row => row.slice(0, COMMIT_HEADERS.length));
+  const newRows = (data.commits || []).map(commit => {
     const typeLabel = commit.type === "TASK"   ? "TASK" :
                       commit.type === "BUG"    ? "BUG" :
                       commit.type === "UPDATE" ? "UPDATE" : "OTHER";
-    sheet.appendRow([
+    return [
       data.week, data.author, data.repo,
       typeLabel, commit.date, commit.hash, commit.message
-    ]);
+    ];
   });
-  
+  const bodyRows = keptRows.concat(newRows);
+  const previousBodyRows = Math.max(sheet.getLastRow() - 1, 0);
+
+  sheet.getRange(1, 1, 1, COMMIT_HEADERS.length).setValues([COMMIT_HEADERS]);
+  if (previousBodyRows > 0) {
+    sheet.getRange(2, 1, previousBodyRows, COMMIT_HEADERS.length).clearContent();
+  }
+  if (bodyRows.length) {
+    sheet.getRange(2, 1, bodyRows.length, COMMIT_HEADERS.length).setValues(bodyRows);
+  }
+
+  return {
+    startRow: 2 + keptRows.length,
+    rowCount: newRows.length,
+    totalRows: bodyRows.length + 1
+  };
 }
 
-function formatWorkbook() {
+function formatChangedRows(summaryRow, commitRows, weekRow) {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   ss.setSpreadsheetLocale("en_US");
-  formatSummarySheet(ss.getSheetByName(SHEET_SUMMARY));
-  formatCommitSheet(ss.getSheetByName(SHEET_COMMITS));
-  formatWeekSheet(ss.getSheetByName(SHEET_WEEKS));
+
+  const summary = ss.getSheetByName(SHEET_SUMMARY);
+  prepareSummaryLayout(summary);
+  formatHeader(summary, SUMMARY_HEADERS.length);
+  if (summaryRow > 1) {
+    formatSummaryRows(summary, summaryRow, 1);
+  }
+  applyFilter(summary, SUMMARY_HEADERS.length);
+
+  const commits = ss.getSheetByName(SHEET_COMMITS);
+  prepareCommitLayout(commits);
+  formatHeader(commits, COMMIT_HEADERS.length);
+  if (commitRows && commitRows.rowCount > 0) {
+    formatCommitRows(commits, commitRows.startRow, commitRows.rowCount);
+  }
+  applyFilter(commits, COMMIT_HEADERS.length);
+
+  const weeks = ss.getSheetByName(SHEET_WEEKS);
+  prepareWeekLayout(weeks);
+  formatHeader(weeks, WEEK_HEADERS.length);
+  if (weekRow > 1) {
+    formatWeekRows(weeks, weekRow, 1);
+  }
+  applyFilter(weeks, WEEK_HEADERS.length);
 }
 
-function formatSummarySheet(sheet) {
+function prepareSummaryLayout(sheet) {
   if (!sheet) return;
   sheet.setHiddenGridlines(true);
   sheet.setFrozenRows(1);
@@ -251,68 +348,9 @@ function formatSummarySheet(sheet) {
   sheet.setColumnWidths(8, 1, 520);
   sheet.setColumnWidths(9, 1, 360);
   sheet.setRowHeight(1, 38);
-
-  const lastRow = Math.max(sheet.getLastRow(), 1);
-  const lastCol = SUMMARY_HEADERS.length;
-  formatHeader(sheet, lastCol);
-
-  if (lastRow > 1) {
-    const body = sheet.getRange(2, 1, lastRow - 1, lastCol);
-    body
-      .setFontFamily("Arial")
-      .setFontSize(10)
-      .setFontColor("#111827")
-      .setVerticalAlignment("middle")
-      .setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP)
-      .setBorder(true, true, true, true, true, true, BORDER, SpreadsheetApp.BorderStyle.SOLID);
-
-    for (let row = 2; row <= lastRow; row++) {
-      const bg = row % 2 === 0 ? EVEN_ROW_BG : WHITE;
-      sheet.getRange(row, 1, 1, lastCol).setBackground(bg);
-      sheet.setRowHeight(row, 32);
-    }
-    sheet.getRange(2, 5, lastRow - 1, 3).setHorizontalAlignment("center");
-    sheet.getRange(2, 8, lastRow - 1, 2).setHorizontalAlignment("left");
-  }
-
-  applyFilter(sheet, lastCol);
 }
 
-function formatWeekSheet(sheet) {
-  if (!sheet) return;
-  sheet.setHiddenGridlines(true);
-  sheet.setFrozenRows(1);
-  sheet.setColumnWidths(1, 1, 120);
-  sheet.setColumnWidths(2, 2, 130);
-  sheet.setColumnWidths(4, 1, 180);
-  sheet.setRowHeight(1, 38);
-
-  const lastRow = Math.max(sheet.getLastRow(), 1);
-  const lastCol = WEEK_HEADERS.length;
-  formatHeader(sheet, lastCol);
-
-  if (lastRow > 1) {
-    const body = sheet.getRange(2, 1, lastRow - 1, lastCol);
-    body
-      .setFontFamily("Arial")
-      .setFontSize(10)
-      .setFontColor("#111827")
-      .setVerticalAlignment("middle")
-      .setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP)
-      .setBorder(true, true, true, true, true, true, BORDER, SpreadsheetApp.BorderStyle.SOLID);
-
-    for (let row = 2; row <= lastRow; row++) {
-      const bg = row % 2 === 0 ? EVEN_ROW_BG : WHITE;
-      sheet.getRange(row, 1, 1, lastCol).setBackground(bg);
-      sheet.setRowHeight(row, 32);
-    }
-    sheet.getRange(2, 1, lastRow - 1, 3).setHorizontalAlignment("center");
-  }
-
-  applyFilter(sheet, lastCol);
-}
-
-function formatCommitSheet(sheet) {
+function prepareCommitLayout(sheet) {
   if (!sheet) return;
   sheet.setHiddenGridlines(true);
   sheet.setFrozenRows(1);
@@ -324,27 +362,118 @@ function formatCommitSheet(sheet) {
   sheet.setColumnWidths(6, 1, 90);
   sheet.setColumnWidths(7, 1, 560);
   sheet.setRowHeight(1, 38);
+}
 
+function prepareWeekLayout(sheet) {
+  if (!sheet) return;
+  sheet.setHiddenGridlines(true);
+  sheet.setFrozenRows(1);
+  sheet.setColumnWidths(1, 1, 120);
+  sheet.setColumnWidths(2, 2, 130);
+  sheet.setColumnWidths(4, 1, 180);
+  sheet.setRowHeight(1, 38);
+}
+
+function formatSummaryRows(sheet, startRow, rowCount) {
+  if (!sheet || rowCount <= 0) return;
+  const lastCol = SUMMARY_HEADERS.length;
+  const range = sheet.getRange(startRow, 1, rowCount, lastCol);
+  range
+    .setFontFamily("Arial")
+    .setFontSize(10)
+    .setFontColor("#111827")
+    .setVerticalAlignment("middle")
+    .setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP)
+    .setBorder(true, true, true, true, true, true, BORDER, SpreadsheetApp.BorderStyle.SOLID);
+  range.setBackgrounds(buildAlternatingBackgrounds(startRow, rowCount, lastCol));
+  sheet.setRowHeights(startRow, rowCount, 32);
+  sheet.getRange(startRow, 5, rowCount, 3).setHorizontalAlignment("center");
+  sheet.getRange(startRow, 8, rowCount, 2).setHorizontalAlignment("left");
+}
+
+function formatWeekRows(sheet, startRow, rowCount) {
+  if (!sheet || rowCount <= 0) return;
+  const lastCol = WEEK_HEADERS.length;
+  const range = sheet.getRange(startRow, 1, rowCount, lastCol);
+  range
+    .setFontFamily("Arial")
+    .setFontSize(10)
+    .setFontColor("#111827")
+    .setVerticalAlignment("middle")
+    .setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP)
+    .setBorder(true, true, true, true, true, true, BORDER, SpreadsheetApp.BorderStyle.SOLID);
+  range.setBackgrounds(buildAlternatingBackgrounds(startRow, rowCount, lastCol));
+  sheet.setRowHeights(startRow, rowCount, 32);
+  sheet.getRange(startRow, 1, rowCount, 3).setHorizontalAlignment("center");
+}
+
+function formatCommitRows(sheet, startRow, rowCount) {
+  if (!sheet || rowCount <= 0) return;
+  const lastCol = COMMIT_HEADERS.length;
+  const range = sheet.getRange(startRow, 1, rowCount, lastCol);
+  range
+    .setFontFamily("Arial")
+    .setFontSize(10)
+    .setFontColor("#111827")
+    .setVerticalAlignment("top")
+    .setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP)
+    .setBorder(true, true, true, true, true, true, BORDER, SpreadsheetApp.BorderStyle.SOLID);
+  sheet.getRange(startRow, 4, rowCount, 1).setHorizontalAlignment("center").setFontWeight("bold");
+  sheet.getRange(startRow, 6, rowCount, 1).setFontFamily("Courier New").setHorizontalAlignment("center");
+  sheet.getRange(startRow, 7, rowCount, 1).setHorizontalAlignment("left");
+  applyCommitTypeColors(sheet, startRow, rowCount, lastCol);
+}
+
+function buildAlternatingBackgrounds(startRow, rowCount, colCount) {
+  const backgrounds = [];
+  for (let i = 0; i < rowCount; i++) {
+    const row = startRow + i;
+    backgrounds.push(Array(colCount).fill(row % 2 === 0 ? EVEN_ROW_BG : WHITE));
+  }
+  return backgrounds;
+}
+
+function formatWorkbook() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  ss.setSpreadsheetLocale("en_US");
+  formatSummarySheet(ss.getSheetByName(SHEET_SUMMARY));
+  formatCommitSheet(ss.getSheetByName(SHEET_COMMITS));
+  formatWeekSheet(ss.getSheetByName(SHEET_WEEKS));
+}
+
+function formatSummarySheet(sheet) {
+  if (!sheet) return;
+  const lastRow = Math.max(sheet.getLastRow(), 1);
+  const lastCol = SUMMARY_HEADERS.length;
+  prepareSummaryLayout(sheet);
+  formatHeader(sheet, lastCol);
+  if (lastRow > 1) {
+    formatSummaryRows(sheet, 2, lastRow - 1);
+  }
+  applyFilter(sheet, lastCol);
+}
+
+function formatWeekSheet(sheet) {
+  if (!sheet) return;
+  const lastRow = Math.max(sheet.getLastRow(), 1);
+  const lastCol = WEEK_HEADERS.length;
+  prepareWeekLayout(sheet);
+  formatHeader(sheet, lastCol);
+  if (lastRow > 1) {
+    formatWeekRows(sheet, 2, lastRow - 1);
+  }
+  applyFilter(sheet, lastCol);
+}
+
+function formatCommitSheet(sheet) {
+  if (!sheet) return;
   const lastRow = Math.max(sheet.getLastRow(), 1);
   const lastCol = COMMIT_HEADERS.length;
+  prepareCommitLayout(sheet);
   formatHeader(sheet, lastCol);
-
   if (lastRow > 1) {
-    const body = sheet.getRange(2, 1, lastRow - 1, lastCol);
-    body
-      .setFontFamily("Arial")
-      .setFontSize(10)
-      .setFontColor("#111827")
-      .setVerticalAlignment("top")
-      .setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP)
-      .setBorder(true, true, true, true, true, true, BORDER, SpreadsheetApp.BorderStyle.SOLID);
-
-    sheet.getRange(2, 4, lastRow - 1, 1).setHorizontalAlignment("center").setFontWeight("bold");
-    sheet.getRange(2, 6, lastRow - 1, 1).setFontFamily("Courier New").setHorizontalAlignment("center");
-    sheet.getRange(2, 7, lastRow - 1, 1).setHorizontalAlignment("left");
-    applyCommitTypeColors(sheet, lastRow, lastCol);
+    formatCommitRows(sheet, 2, lastRow - 1);
   }
-
   applyFilter(sheet, lastCol);
 }
 
@@ -361,29 +490,23 @@ function formatHeader(sheet, lastCol) {
     .setBorder(true, true, true, true, true, true, HEADER_BG, SpreadsheetApp.BorderStyle.SOLID);
 }
 
-function applyCommitTypeColors(sheet, lastRow, lastCol) {
-  const allRows = sheet.getDataRange().getValues();
-  for (let i = 1; i < allRows.length; i++) {
-    const row = i + 1;
-    if (allRows[i][3] === "BUG") {
-      sheet.getRange(row, 1, 1, lastCol).setBackground(BUG_BG);
-    } else if (allRows[i][3] === "TASK") {
-      sheet.getRange(row, 1, 1, lastCol).setBackground(TASK_BG);
-    } else if (allRows[i][3] === "UPDATE") {
-      sheet.getRange(row, 1, 1, lastCol).setBackground(UPDATE_BG);
-    } else {
-      const bg = row % 2 === 0 ? OTHER_BG : WHITE;
-      sheet.getRange(row, 1, 1, lastCol).setBackground(bg);
-    }
-    sheet.setRowHeight(row, 42);
-  }
+function applyCommitTypeColors(sheet, startRow, rowCount, lastCol) {
+  const types = sheet.getRange(startRow, 4, rowCount, 1).getValues();
+  const backgrounds = types.map((row, index) => {
+    const rowNumber = startRow + index;
+    const type = row[0];
+    const bg = type === "BUG" ? BUG_BG :
+               type === "TASK" ? TASK_BG :
+               type === "UPDATE" ? UPDATE_BG :
+               rowNumber % 2 === 0 ? OTHER_BG : WHITE;
+    return Array(lastCol).fill(bg);
+  });
+  sheet.getRange(startRow, 1, rowCount, lastCol).setBackgrounds(backgrounds);
+  sheet.setRowHeights(startRow, rowCount, 42);
 }
 
 function applyFilter(sheet, lastCol) {
-  const existingFilter = sheet.getFilter();
-  if (existingFilter) {
-    existingFilter.remove();
-  }
+  if (sheet.getFilter()) return;
   const lastRow = Math.max(sheet.getLastRow(), 1);
   sheet.getRange(1, 1, lastRow, lastCol).createFilter();
 }
