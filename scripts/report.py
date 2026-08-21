@@ -17,6 +17,8 @@ import urllib.error
 from datetime import datetime, timedelta
 import argparse
 
+TOOL_VERSION = "1.1"
+
 # ── Màu terminal ─────────────────────────────────────────────
 GREEN  = "\033[92m"
 YELLOW = "\033[93m"
@@ -190,14 +192,14 @@ def is_report_command(line):
 
 
 def format_structured_prompt_notes(text, max_line_chars=90):
-    """Parse prompt 3 dòng: command, vấn đề, plan tuần tới."""
+    """Parse prompt bắt buộc đúng 3 dòng: command, vấn đề, plan tuần tới."""
     lines = [clean_prompt_line(line) for line in text.splitlines() if clean_prompt_line(line)]
-    if len(lines) < 3 or not is_report_command(lines[0]):
+    if len(lines) != 3 or not is_report_command(lines[0]):
         return ""
 
     issues = split_semicolon_items(strip_prompt_section_label(lines[1]), max_line_chars)
     plans = split_semicolon_items(strip_prompt_section_label(lines[2]), max_line_chars)
-    if not issues and not plans:
+    if not issues or not plans:
         return ""
 
     formatted = []
@@ -213,30 +215,21 @@ def format_structured_prompt_notes(text, max_line_chars=90):
 
 
 def normalize_performance_notes(text, max_lines=5, max_line_chars=90):
-    """Chuẩn hóa summary notes thành các ý ngắn, dễ đọc trong một cell."""
+    """Chuẩn hóa prompt report bắt buộc theo cấu trúc 3 dòng."""
     if not text:
         return ""
+    return format_structured_prompt_notes(text, max_line_chars)
 
-    structured_notes = format_structured_prompt_notes(text, max_line_chars)
-    if structured_notes:
-        return structured_notes
 
-    stripped_text = text.strip()
-    lowered_text = stripped_text.lower()
-    if "vấn đề:" in lowered_text and "plan tuần tới:" in lowered_text:
-        return stripped_text
-
-    lines = []
-    for raw_line in text.splitlines():
-        line = clean_prompt_line(raw_line)
-        if not line:
-            continue
-        line = truncate_note_line(line, max_line_chars)
-        lines.append(f"- {line}")
-        if len(lines) >= max_lines:
-            break
-
-    return "\n".join(lines)
+def print_required_prompt_format_error():
+    print(f"{RED}❌  Prompt report phải đúng cấu trúc 3 dòng.{RESET}")
+    print("   Dòng 1: câu lệnh report, ví dụ: report hoặc báo cáo tuần W30")
+    print("   Dòng 2: Vấn đề, nhiều ý cách nhau bằng dấu ;")
+    print("   Dòng 3: Plan tuần tới, nhiều ý cách nhau bằng dấu ;")
+    print("   Ví dụ:")
+    print("   report")
+    print("   Không có blocker; Cần chờ review API")
+    print("   Hoàn tất flow thanh toán; Bổ sung test webhook")
 
 
 def read_performance_source(args):
@@ -363,14 +356,15 @@ def main():
     parser = argparse.ArgumentParser(
         description="Tổng hợp commit tuần → Google Sheets"
     )
+    parser.add_argument("--version", action="version", version=f"weekly-report-tools {TOOL_VERSION}")
     parser.add_argument("--week", help="Tuần cụ thể: YYYY-Www hoặc Www (vd: 2025-W24 hoặc W24)")
     parser.add_argument("--author", help="Override tên tác giả")
     parser.add_argument("--dry-run", action="store_true",
                         help="Chỉ in ra màn hình, không gửi lên Sheets")
     parser.add_argument("--performance",
-                        help="Summary/prompt notes do agent hoặc user cung cấp")
+                        help="Prompt report bắt buộc đúng 3 dòng")
     parser.add_argument("--performance-file",
-                        help="File chứa summary/prompt notes do agent hoặc user cung cấp")
+                        help="File chứa prompt report bắt buộc đúng 3 dòng")
     parser.add_argument("--note",
                         help="Nội dung cột Note do user nhập")
     parser.add_argument("--note-file",
@@ -405,10 +399,13 @@ def main():
 
     performance_source = read_performance_source(args)
     performance = normalize_performance_notes(performance_source)
+    if performance_source and not performance:
+        print_required_prompt_format_error()
+        sys.exit(1)
     if performance:
-        print(f"🧠  Summary notes: {GREEN}dùng nội dung do agent/user cung cấp{RESET}")
+        print(f"🧠  Summary notes: {GREEN}dùng prompt 3 dòng do user cung cấp{RESET}")
     else:
-        print(f"🧠  Summary notes: {YELLOW}không có nội dung từ agent/user, để trống{RESET}")
+        print(f"🧠  Summary notes: {YELLOW}không có prompt 3 dòng từ user, để trống{RESET}")
 
     note_provided, note = read_note_override(args)
     if note_provided:
