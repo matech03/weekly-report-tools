@@ -179,7 +179,7 @@ function writeWeekRow(data) {
 function buildSummaryNote(data) {
   const fallback = data.summary_note || data.performance || "";
   return parseStructuredReportPrompt(data.report_prompt) ||
-    parseStructuredReportPrompt(fallback) || fallback;
+    parseStructuredReportPrompt(fallback) || "";
 }
 
 function parseStructuredReportPrompt(text) {
@@ -190,11 +190,11 @@ function parseStructuredReportPrompt(text) {
     .map(cleanPromptLine)
     .filter(Boolean);
 
-  if (lines.length < 3 || !isReportCommand(lines[0])) return "";
+  if (lines.length !== 3 || !isReportCommand(lines[0])) return "";
 
   const issues = splitSemicolonItems(stripPromptSectionLabel(lines[1]));
   const plans = splitSemicolonItems(stripPromptSectionLabel(lines[2]));
-  if (!issues.length && !plans.length) return "";
+  if (!issues.length || !plans.length) return "";
 
   const formatted = [];
   if (issues.length) {

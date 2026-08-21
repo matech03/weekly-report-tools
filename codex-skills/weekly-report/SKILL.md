@@ -63,9 +63,9 @@ Treat these as requests to use this skill:
 - `gui report tuan`
 - `submit report`
 
-## Supported prompt structure
+## Required prompt structure
 
-The user may provide a 3-line report prompt:
+AI report submissions must use exactly 3 non-empty prompt lines:
 
 ```text
 report
@@ -75,16 +75,19 @@ Plan 1; Plan 2
 
 Meaning:
 
-1. Line 1 is the report command used to map this skill. It can also contain week
-author/preview words, for example `preview report W24 của dev3`.
-2. Line 2 is `Vấn đề`. If there are multiple issue items, they are separated by
+1. Line 1 is the report command used to map this skill. It can also contain week,
+   author, or preview words, for example `preview report W24 của dev3`.
+2. Line 2 is `Vấn đề`. If there are multiple issue items, separate them with
    semicolons (`;`) on this line.
-3. Line 3 is `Plan tuần tới`. If there are multiple plan items, they are separated
-   by semicolons (`;`) on this line.
+3. Line 3 is `Plan tuần tới`. If there are multiple plan items, separate them
+   with semicolons (`;`) on this line.
 
-When line 2 and line 3 are present, save the original 3-line prompt to the
-summary/performance temporary file. `report.py` and Google Apps Script will parse
-it into:
+If the prompt is missing line 2 or line 3, has more than 3 non-empty lines, or has
+an empty issue/plan line, ask the user to resend the prompt in the required
+structure and do not run `report.py`.
+
+Save the original valid 3-line prompt to the summary/performance temporary file.
+`report.py` and Google Apps Script will parse it into:
 
 ```text
 Vấn đề:
@@ -96,64 +99,30 @@ Plan tuần tới:
 - ý 2
 ```
 
-User-provided `Vấn đề`/`Plan tuần tới` lines take priority over agent-generated
-summary notes.
-
 ## Workflow
 
 1. Confirm the current directory is the target project repository.
 2. Check that `.team-tools/report.py` exists.
    - If it does not exist, explain that weekly-report-tools is not installed in
      this project and point to the install command in this repository README.
-3. Detect whether the user supplied the 3-line prompt structure above.
-   - If yes, save the original 3-line prompt to a temporary text file and pass it
-     with `--performance-file` so it becomes the formatted `Summary` value.
-   - If no and the prompt has multiple lines, treat only the first line as the
-     report request, for example `báo cáo tuần`, `report weekly`, or
-     `báo cáo tuần W30`. Treat every line from the second line onward as the
-     content for the Google Sheets `Note` column.
-     - Preserve the note content as user-written; do not summarize, rewrite, or
-       merge it into the `Summary` notes.
-     - Save the note content to a temporary text file and pass it with
-       `--note-file /path/to/note.txt`.
-     - If the prompt has only one line, omit `--note-file` so an existing manual
-       `Note` value in Google Sheets is preserved on resubmit.
-   - If no user-provided summary/note content is available, inspect the weekly
-     commits and code changes as the current agent. Use commands such as:
-
-   ```bash
-   git log --author="<author>" --since="<week start>" --until="<week end>" --no-merges --all --stat
-   git show --stat --patch <commit>
-   ```
-
-   Summarize 2-5 concise Vietnamese notes about what the developer worked on in
-   the project. Save the notes to a temporary text file.
-   - Use bullet lines starting with `- `.
-   - Keep each bullet under 90 characters.
-   - Make each bullet easy to scan; avoid paragraphs and long explanations.
-
-4. For a normal report request, submit immediately and pass the summary/prompt
-   temporary file when available. Include `--note-file` when the user supplied
-   note content:
+3. Validate that the user supplied exactly the 3-line prompt structure above.
+   - If valid, save the original 3-line prompt to a temporary text file and pass
+     it with `--performance-file` so it becomes the formatted `Summary` value.
+   - If invalid, ask the user to resend the 3-line prompt and stop.
+4. For a normal report request, submit immediately and pass the prompt file:
 
    ```bash
    python .team-tools/report.py --performance-file /path/to/summary.txt
-   python .team-tools/report.py --performance-file /path/to/summary.txt --note-file /path/to/note.txt
    ```
 
-   The script sends the formatted `Summary` notes to Google Sheets. If the agent
-   cannot analyze the changes and the user did not supply line 2/3 notes, omit
-   `--performance-file`; the Summary field will be left blank.
-
-6. Only preview when the user explicitly asks with words such as `preview`,
+5. Only preview when the user explicitly asks with words such as `preview`,
    `xem trước`, `xem truoc`, `xem thử`, `xem thu`, or `dry-run`:
 
    ```bash
    python .team-tools/report.py --dry-run --performance-file /path/to/summary.txt
-   python .team-tools/report.py --dry-run --performance-file /path/to/summary.txt --note-file /path/to/note.txt
    ```
 
-7. If the user specifies a week on the first line, pass it through as ISO week (`YYYY-Www`) or week number (`Www`). Week numbers without a year use the current ISO year:
+6. If the user specifies a week on the first line, pass it through as ISO week (`YYYY-Www`) or week number (`Www`). Week numbers without a year use the current ISO year:
 
    ```bash
    python .team-tools/report.py --week YYYY-Www --performance-file /path/to/summary.txt
@@ -162,7 +131,7 @@ summary notes.
    python .team-tools/report.py --week Www --dry-run --performance-file /path/to/summary.txt
    ```
 
-8. If the user specifies an author on the first line, pass it through. Treat phrases such as
+7. If the user specifies an author on the first line, pass it through. Treat phrases such as
    `báo cáo tuần của dev3`, `report của dev3`, or `weekly report for dev3` as
    author-specific report requests:
 
@@ -173,18 +142,15 @@ summary notes.
 
 ## Safety
 
-- A plain `report` request means submit to Google Sheets.
+- A plain `report` request still requires the 3-line prompt structure before
+  submitting to Google Sheets.
 - The report excludes merge commits with `--no-merges`.
 - If the selected author/week has no commits, the script exits without
   submitting anything; report that result to the user.
 - Use `--dry-run` only when the request explicitly asks to preview or view
   before sending.
-- User-written note content belongs only in the `Note` column unless it matches
-  the 3-line issue/plan summary structure above.
-- Summary analysis is best-effort. User-provided 3-line prompt notes take
-  priority. Otherwise, the current agent should analyze commits before running
-  `report.py`. Do not block the report if the agent cannot analyze the changes;
-  omit `--performance-file` and submit with a blank Summary field.
+- Do not auto-generate replacement summary notes when the required 3-line prompt
+  is missing or invalid.
 - If `SHEETS_WEBHOOK_URL` is missing, invalid, or the Apps Script endpoint
   returns an auth/deployment error, summarize the exact error and the next
   configuration step.

@@ -69,21 +69,21 @@ Nếu Google Sheet đang có layout cũ với cột `Bugs` và `Updates`, Apps S
 Others = Bugs + Updates + Other cũ
 ```
 
-Cột `Note` trong Google Sheets có thể nhập từ prompt nhiều dòng khi dùng Claude/Codex. Nếu không gửi note mới, giá trị `Note` hiện có sẽ được giữ lại khi submit lại cùng tuần/member/repository.
+Cột `Note` trong Google Sheets có thể nhập thủ công bằng `--note` hoặc `--note-file`. Nếu không gửi note mới, giá trị `Note` hiện có sẽ được giữ lại khi submit lại cùng tuần/member/repository.
 
 #### Claude/Codex report skill
 
-Sau khi cài đặt, có thể gọi report bằng:
+Sau khi cài đặt, gọi report bằng prompt đủ 3 dòng:
 
 ```text
 report
-preview report
-/report
+Không có blocker; Cần chờ review API
+Hoàn tất màn hình report; Bổ sung test webhook
 ```
 
-Mặc định `report` sẽ gửi lên Google Sheets. Chỉ chạy preview khi prompt có ý rõ như `preview`, `xem trước`, `dry-run`.
+Mặc định `report` sẽ gửi lên Google Sheets. Chỉ chạy preview khi dòng 1 có ý rõ như `preview`, `xem trước`, `dry-run`.
 
-Prompt report có thể dùng cấu trúc 3 dòng để điền cột `Summary`:
+Prompt report khi dùng Claude/Codex bắt buộc đúng cấu trúc 3 dòng để điền cột `Summary`:
 
 ```text
 report
@@ -107,13 +107,7 @@ Plan tuần tới:
 - ý 2
 ```
 
-Nếu prompt nhiều dòng nhưng không theo cấu trúc 3 dòng trên, dòng đầu là yêu cầu báo cáo; từ dòng thứ 2 trở đi là nội dung cột `Note` và có thể ghi bất kỳ:
-
-```text
-báo cáo tuần W30
-Kế hoạch tuần tới: hoàn thiện flow thanh toán
-Vấn đề trong tuần: chờ API từ backend
-```
+Nếu prompt thiếu dòng 2/dòng 3, có nhiều hơn 3 dòng không rỗng, hoặc dòng vấn đề/plan bị trống, tool sẽ yêu cầu nhập lại đúng cấu trúc và không gửi report.
 
 ### Yêu cầu
 
@@ -149,7 +143,13 @@ bash report-tools-installer.sh
 rm report-tools-installer.sh
 ```
 
-Installer sẽ tự cài hook commit, tool report, Claude/Codex skill và cấu hình report mặc định.
+Installer sẽ tự cài hook commit, tool report, Claude/Codex skill và cấu hình report mặc định, đồng thời hiển thị phiên bản tool đã cài.
+
+Kiểm tra phiên bản đã cài:
+
+```bash
+python .team-tools/report.py --version
+```
 
 ### 2. Commit hằng ngày
 
@@ -210,22 +210,23 @@ python .team-tools/report.py --week W24 --author "Nguyen Van A" --dry-run
 python .team-tools/report.py --week W24 --note-file /path/to/note.txt
 ```
 
-Dùng Claude/Codex:
+Dùng Claude/Codex với prompt bắt buộc 3 dòng:
 
 ```text
 report
-báo cáo tuần
-/report
-preview report
-xem trước report
-report W24
-báo cáo tuần W24 của dev3
-báo cáo tuần W30
-Kế hoạch tuần tới: hoàn thiện flow thanh toán
-Vấn đề trong tuần: chờ API từ backend
+Không có blocker; Cần chờ review API
+Hoàn tất màn hình report; Bổ sung test webhook
 ```
 
-Nếu muốn gửi kèm vấn đề và plan tuần tới vào cột `Summary`, nhập 3 dòng:
+Có thể thêm tuần/author/preview ở dòng 1:
+
+```text
+preview report W24 của Nguyen Van A
+Không có blocker; Cần chờ review API
+Hoàn tất màn hình report; Bổ sung test webhook
+```
+
+Nếu muốn gửi kèm vấn đề và plan tuần tới vào cột `Summary`, luôn nhập đủ 3 dòng:
 
 ```text
 report
@@ -245,8 +246,8 @@ Plan tuần tới:
 - Bổ sung test webhook
 ```
 
-Nếu muốn gửi nội dung cột `Note`, dùng prompt nhiều dòng không theo cấu trúc summary 3 dòng, hoặc dùng `--note`/`--note-file`.
-Nếu không truyền summary notes, cột `Summary` sẽ để trống nhưng report vẫn gửi bình thường. Nếu không truyền note, cột `Note` hiện có trên Google Sheets sẽ được giữ nguyên khi submit lại.
+Nếu muốn gửi nội dung cột `Note`, dùng `--note`/`--note-file` khi chạy thủ công.
+Khi dùng Claude/Codex, nếu không nhập đúng prompt 3 dòng thì tool sẽ không gửi report. Nếu không truyền note thủ công, cột `Note` hiện có trên Google Sheets sẽ được giữ nguyên khi submit lại.
 
 ### Troubleshooting nhanh
 

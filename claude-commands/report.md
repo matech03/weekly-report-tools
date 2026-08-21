@@ -16,7 +16,7 @@ Default to submission.
 
 ## Prompt structure
 
-The user may provide a 3-line report prompt for the Google Sheets `Summary` column:
+The user must provide a 3-line report prompt for AI report submissions:
 
 ```text
 report
@@ -29,8 +29,10 @@ Plan 1; Plan 2
 - Line 2 is `Vấn đề`; multiple issue items are separated by `;` on the same line.
 - Line 3 is `Plan tuần tới`; multiple plan items are separated by `;` on the same line.
 
-If line 2 and line 3 are present, save the original 3-line prompt to the summary
-file and pass it to `report.py`. `report.py`/Google Apps Script will format it as:
+If the prompt does not have exactly 3 non-empty lines, ask the user to resend it
+in the required structure and do not run `report.py`. Save the original valid
+3-line prompt to the summary file and pass it to `report.py`. `report.py`/Google
+Apps Script will format it as:
 
 ```text
 Vấn đề:
@@ -42,41 +44,26 @@ Plan tuần tới:
 - ý 2
 ```
 
-User-provided issue/plan lines take priority over agent-generated summary notes.
-If the prompt has multiple lines but does not match the 3-line summary structure,
-treat the first line as the report request and every line from the second line
-onward as the Google Sheets `Note` column content. Preserve that note exactly as
-user-written, save it to a temporary text file, and pass it with
-`--note-file /path/to/note.txt`. Do not merge this user note into the generated
-`Summary` notes.
-
 Before running `report.py`, verify `.team-tools/report.py` exists. If it is
 missing, explain that weekly-report-tools has not been installed in this project.
 
-If the user did not supply the 3-line prompt structure, inspect the weekly
-commits and code changes as the current agent. Use `git log --no-merges --stat`
-and `git show --stat --patch <commit>` for the selected author/week. Summarize
-2-5 concise Vietnamese notes about what the developer worked on in the project
-and save them to a temporary text file.
-Use bullet lines starting with `- `, keep each bullet under 90 characters, and
-avoid paragraphs or long explanations.
+Do not auto-generate replacement summary notes when the 3-line prompt is missing
+or invalid. Ask the user for the required prompt instead.
 
 - If the user asks for `report`, `báo cáo tuần`, or `weekly report`, run:
 
   ```bash
   python .team-tools/report.py --performance-file /path/to/summary.txt
-  python .team-tools/report.py --performance-file /path/to/summary.txt --note-file /path/to/note.txt
   ```
 
-  If neither user-provided issue/plan notes nor agent summary notes are
-  available, omit `--performance-file`; the Summary field will be left blank.
+  Always include the saved 3-line prompt as `--performance-file`. Do not submit
+  from an AI prompt that is missing line 2 or line 3.
 
 - If the user explicitly asks to `preview`, `xem trước`, `xem truoc`,
   `xem thử`, `xem thu`, or `dry-run`, run:
 
   ```bash
   python .team-tools/report.py --dry-run --performance-file /path/to/summary.txt
-  python .team-tools/report.py --dry-run --performance-file /path/to/summary.txt --note-file /path/to/note.txt
   ```
 
 - If the user provides an ISO week (`YYYY-Www`) or a week number (`Www`), include it and keep the same submit/preview
@@ -95,10 +82,9 @@ avoid paragraphs or long explanations.
   python .team-tools/report.py --author "Author Name" --performance-file /path/to/summary.txt
   ```
 
-Summary analysis is best-effort. Do not block the report if the current agent
-cannot analyze the changes; omit `--performance-file` and submit with a blank
-Summary field. User-written note content belongs only in the `Note` column unless
-it matches the 3-line issue/plan summary structure above.
+The 3-line prompt structure is required for AI report submissions. If it is
+missing or invalid, ask the user to resend the prompt instead of submitting a
+blank or generated Summary.
 
 The report excludes merge commits. If the selected author/week has no commits,
 the script exits without submitting anything; report that result to the user.
